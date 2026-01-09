@@ -1,6 +1,6 @@
 use std::{collections::HashMap, panic};
 
-use crate::datatypes::{ast_statements::{AstIdentifiers, BuiltInFunctionsAst, CgBranchLinked, CgBuiltInFunctions, CgExpression, CgIdentifiers, CgStatement, CgStatementType, CgVariableInitialization, Expression, FunctionArg, Literal, StackVariableData, Statement, Statements, VariableType}, general_functions::align_memory, program_data::ProgramData, stack_frame::{StackFrame, StackVariable}, token::Identifiers};
+use crate::datatypes::{ast_statements::{AstIdentifiers, BuiltInFunctionsAst, CgBranchLinked, CgBuiltInFunctions, CgExpression, CgIdentifiers, CgStatement, CgStatementType, CgVariableAssignment, Expression, FunctionArg, Literal, StackVariableData, Statement, Statements, VariableType}, general_functions::align_memory, program_data::ProgramData, stack_frame::{StackFrame, StackVariable}, token::Identifiers};
 
 macro_rules! throw_err {
     ($self:expr, $error:expr) => {
@@ -25,37 +25,13 @@ impl<'a> SemanticAnaytis<'a> {
         match statement.statement_type.clone() {
             Statements::VariableDeclaration(var_init) => {
                 if let Some(init_value) = var_init.value {
-                    let init_valid = match (var_init.variable_type.clone(), init_value.clone()) {
-                        (VariableType::I8  | VariableType::I16 | VariableType::I32 | VariableType::I64 | VariableType::U8 | VariableType::U16 | VariableType::U32 | VariableType::U64,
-                        Expression::Literal(Literal::Number(_))) => true,
-                        (_, Expression::Identifier(Identifiers::Identifier(identifier))) => {
-                            if let Some(var) = self.get_stack_variable(stack_frame, &identifier) {
-                                var.variable_type == var_init.variable_type
-                            } else if let Some(func_arg) = self.program_data.get_function_stack_arg_ref(stack_frame, &identifier) {
-                                func_arg.var.arg_var_type == var_init.variable_type
-                            } else {
-                                false
-                            }
-                        }
-                        _ => false
-                    };
-
-                    if !init_valid {
-                        throw_err!(self, "Invalid var declaration");
-                    }
-
-                    let cg_val = self.expression_to_cg(stack_frame, init_value);
-
-                    let var_being_init_ref = self.program_data.get_stack_variable_ref(stack_frame, &var_init.name, 0);
-
-                    if let Some(cg_val_unwrapped) = cg_val {
-                        self.add_cg_statement_to_stack_frame(stack_frame, CgStatement{statement_type: CgStatementType::VariableInitialization(CgVariableInitialization{init_value: cg_val_unwrapped, stack_offset: var_being_init_ref.unwrap().local_offset, variable_type: var_init.variable_type})});
-                    } else {
-                        return;
-                    }
+                    self.initialize_identifier(&var_init.name, &init_value, stack_frame);
                 };
 
                 return;
+            },
+            Statements::Assignment(assignment) => {
+                self.initialize_identifier(&assignment.identifier, &assignment.expression, stack_frame);
             },
             Statements::Expression(Expression::BuiltInFunction(func)) => {
                 match func {
@@ -195,6 +171,59 @@ impl<'a> SemanticAnaytis<'a> {
         }
 
         self.process_stack_frame(stack_frame_index);
+    }
+
+    pub fn match_var_type_with_expr(&self, variable_type : &VariableType, expr : &Expression, stack_frame : usize) -> bool {
+        let res = match (variable_type.clone(), expr.clone()) {
+            (VariableType::I8  | VariableType::I16 | VariableType::I32 | VariableType::I64 | VariableType::U8 | VariableType::U16 | VariableType::U32 | VariableType::U64,
+            Expression::Literal(Literal::Number(_))) => true,
+            (_, Expression::Identifier(Identifiers::Identifier(identifier))) => {
+                if let Some(var) = self.get_stack_variable(stack_frame, &identifier) {
+                    var.variable_type == variable_type.clone()
+                } else if let Some(func_arg) = self.program_data.get_function_stack_arg_ref(stack_frame, &identifier) {
+                    func_arg.var.arg_var_type == variable_type.clone()
+                } else {
+                    false
+                }
+            }
+            _ => false
+        };
+
+        return res;
+    }
+
+    pub fn initialize_identifier(&mut self, identifier : &str, expr : &Expression, stack_frame : usize) -> () {
+        if let Some(stack_var_ref) = self.program_data.get_stack_variable_ref(stack_frame, identifier, 0) {
+            let init_valid = self.match_var_type_with_expr(&stack_var_ref.var.variable_type, expr, stack_frame);
+
+            if !init_valid {
+                throw_err!(self, "Invalid var declaration");
+            }
+
+            let cg_val = self.expression_to_cg(stack_frame, expr.clone());
+
+            if let Some(cg_val_unwrapped) = cg_val {
+                self.add_cg_statement_to_stack_frame(stack_frame, CgStatement{statement_type: CgStatementType::VariableAssignment(CgVariableAssignment{assign_value: cg_val_unwrapped, stack_offset: stack_var_ref.local_offset, variable_type: stack_var_ref.var.variable_type})});
+            } else {
+                return;
+            }
+        } else if let Some(function_arg_ref) = self.program_data.get_function_stack_arg_ref(stack_frame, identifier) {
+            let init_valid = self.match_var_type_with_expr(&function_arg_ref.var.arg_var_type, expr, stack_frame);
+
+            if !init_valid {
+                throw_err!(self, "Invalid var declaration");
+            }
+
+            let cg_val = self.expression_to_cg(stack_frame, expr.clone());
+
+            if let Some(cg_val_unwrapped) = cg_val {
+                self.add_cg_statement_to_stack_frame(stack_frame, CgStatement{statement_type: CgStatementType::VariableAssignment(CgVariableAssignment{assign_value: cg_val_unwrapped, stack_offset: function_arg_ref.local_offset, variable_type: function_arg_ref.var.arg_var_type})});
+            } else {
+                return;
+            }
+        } else {
+            throw_err!(self, "Expected assignment of valid identifier");
+        }
     }
 
     pub fn throw_err(&mut self, err : &str) -> () {

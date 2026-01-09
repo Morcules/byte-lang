@@ -1,6 +1,6 @@
 use std::panic;
 
-use crate::datatypes::ast_statements::{BranchLinkedAst, BuiltInFunctionsAst, Expression, Format, Function, FunctionArg, FunctionDeclaration, Literal, MemoryLocationsAst, Statement, Statements, VariableDeclaration, VariableType};
+use crate::datatypes::ast_statements::{Assignment, BranchLinkedAst, BuiltInFunctionsAst, Expression, Format, Function, FunctionArg, FunctionDeclaration, Literal, MemoryLocationsAst, Statement, Statements, VariableDeclaration, VariableType};
 use crate::datatypes::general_functions::align_memory;
 use crate::datatypes::program_data::ProgramData;
 use crate::datatypes::token::{BuiltInFunctions, Identifiers, Keywords, MemoryLocations, Operators, Punctuations, Token, TokenType};
@@ -371,6 +371,53 @@ impl<'a> Parser<'a> {
                     }
                 }
             },
+            TokenType::Identifiers(Identifiers::Identifier(identifier)) => {
+                self.advance_position();
+
+                match self.current_token().kind {
+                    TokenType::Operator(Operators::Assignment) => {
+                        self.advance_position();
+
+                        let expr : Expression = match self.current_token().kind {
+                            TokenType::Literal(literal) => {
+                                self.advance_position();
+
+                                Expression::Literal(literal)
+                            },
+                            TokenType::Identifiers(Identifiers::Identifier(identifier)) => {
+                                self.advance_position();
+
+                                Expression::Identifier(Identifiers::Identifier(identifier))
+                            },
+                            TokenType::BuiltInFunctions(_) => {
+                                let Some(parsed) = self.parse_next() else {
+                                    throw_err!(self, "Expected expression after assignment");
+                                };
+
+                                let Statements::Expression(expr) = parsed.statement_type else {
+                                    throw_err!(self, "Built in function invalid");
+                                };
+
+                                expr
+                            },
+                            _ => {
+                                throw_err!(self, "Invalid expression given");
+                            }
+                        };
+
+                        if TokenType::Punctuation(Punctuations::Semicolon) != self.current_token().kind {
+                            throw_err!(self, "Expected semicolon after assign");
+                        }
+
+                        self.advance_position();
+
+                        return Some(Statement::new(&token, self.current_token().end_pos, Statements::Assignment(Assignment {identifier: identifier, expression: expr})));
+                    },
+                    _ => {
+                        throw_err!(self, "Invalid token given after identifier");
+                    }
+                }
+            },
             TokenType::BuiltInFunctions(BuiltInFunctions::BranchLinked) => {
                 self.advance_position();
 
@@ -448,10 +495,6 @@ impl<'a> Parser<'a> {
         let tkn = self.program_data.tokens.get(self.position).unwrap().clone(); 
         
         return tkn;
-    }
-
-    pub fn process_asm_instruction(&mut self) -> String {
-        unimplemented!()
     }
 
     pub fn expect_token(&mut self, token_type : TokenType) -> Result<(), ()> {

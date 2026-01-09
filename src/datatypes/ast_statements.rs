@@ -54,9 +54,15 @@ pub struct FunctionDeclaration {
 }
 
 #[derive(Debug, PartialEq, Clone)]
+pub struct Assignment {
+    pub identifier : String,
+    pub expression : Expression
+}
+
+#[derive(Debug, PartialEq, Clone)]
 pub enum Statements {
-    Terminate,
     EOF,
+    Assignment(Assignment),
     VariableDeclaration(VariableDeclaration),
     FunctionDeclaration(FunctionDeclaration),
     StackFramePop,
@@ -228,7 +234,7 @@ pub struct CgStatement {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum CgStatementType {
-    VariableInitialization(CgVariableInitialization),
+    VariableAssignment(CgVariableAssignment),
     BuiltInFunction(CgBuiltInFunctions)
 }
 
@@ -262,8 +268,8 @@ pub struct StackVariableData {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct CgVariableInitialization {
-    pub init_value : CgExpression,
+pub struct CgVariableAssignment {
+    pub assign_value : CgExpression,
     pub stack_offset : usize,
     pub variable_type : VariableType
 }

@@ -6,6 +6,8 @@ void : term(i64 exit_code : [reg(x0)]) {
 }
 
 void : test(i32 test_var : [stack], i64 test_var_two : [stack]) {
+    test_var = 15;
+
     i32 test_variable_init = test_var;
 }
 
@@ -19,6 +21,8 @@ void : main() {
     u8 something = 30;
     u8 something_clone = something;
     i64 exit_code_success = 0;
+
+    exit_code_success = 1;
 
     bl(test, var, exit_code_clone);
     
