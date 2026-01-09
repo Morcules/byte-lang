@@ -14,8 +14,8 @@ impl<'a> CodeGenerator<'a> {
 
     pub fn generate_statement(&mut self, statement : &CgStatement, stack_frame : usize) -> String {
         match statement.statement_type.clone() {
-            CgStatementType::VariableInitialization(var_init) => {
-                return self.init_var(var_init.stack_offset, var_init.variable_type.clone(), var_init.init_value);
+            CgStatementType::VariableAssignment(var_init) => {
+                return self.init_var(var_init.stack_offset, var_init.variable_type.clone(), var_init.assign_value);
             },
             CgStatementType::BuiltInFunction(built_in_function) => {
                 match built_in_function {

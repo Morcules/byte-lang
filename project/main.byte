@@ -20,6 +20,8 @@ void : main() {
     u8 something_clone = something;
     i64 exit_code_success = 0;
 
+    exit_code_success = 1;
+
     bl(test, var, exit_code_clone);
     
     bl(term, exit_code_success);
