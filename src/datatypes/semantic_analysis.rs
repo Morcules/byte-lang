@@ -207,6 +207,20 @@ impl<'a> SemanticAnaytis<'a> {
             } else {
                 return;
             }
+        } else if let Some(function_arg_ref) = self.program_data.get_function_stack_arg_ref(stack_frame, identifier) {
+            let init_valid = self.match_var_type_with_expr(&function_arg_ref.var.arg_var_type, expr, stack_frame);
+
+            if !init_valid {
+                throw_err!(self, "Invalid var declaration");
+            }
+
+            let cg_val = self.expression_to_cg(stack_frame, expr.clone());
+
+            if let Some(cg_val_unwrapped) = cg_val {
+                self.add_cg_statement_to_stack_frame(stack_frame, CgStatement{statement_type: CgStatementType::VariableAssignment(CgVariableAssignment{assign_value: cg_val_unwrapped, stack_offset: function_arg_ref.local_offset, variable_type: function_arg_ref.var.arg_var_type})});
+            } else {
+                return;
+            }
         } else {
             throw_err!(self, "Expected assignment of valid identifier");
         }
