@@ -141,7 +141,6 @@ impl<'a> Parser<'a> {
                     if TokenType::Punctuation(Punctuations::Colon) != self.current_token().kind {
                         args.push(FunctionArg { arg_var_type: var_type.clone(), arg_name, memory_location: MemoryLocationsAst::Stack(stack_mem_allocated) });
                         stack_mem_allocated += var_type.get_variable_size();
-                        self.advance_position();
                         continue;
                     }
 
