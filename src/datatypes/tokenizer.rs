@@ -150,6 +150,9 @@ impl<'a> Tokenizer<'a> {
             "," => {
                 return Some(Token{kind: TokenType::Punctuation(Punctuations::Comma), ..token_default});
             },
+            "cmp" => {
+                return Some(Token{kind: TokenType::BuiltInFunctions(BuiltInFunctions::Compare), ..token_default});
+            },
             "bl" => {
                 return Some(Token{kind: TokenType::BuiltInFunctions(BuiltInFunctions::BranchLinked), ..token_default});
             },

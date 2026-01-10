@@ -228,9 +228,9 @@ fn compile_file() {
     }
 
     let mut code_generator = CodeGenerator::new(&mut program_data);
-    let compiled_code = code_generator.process_all_functions();
+    code_generator.process_all_functions();
 
-    write!(writer, "{}", compiled_code).unwrap();
+    write!(writer, "{}", code_generator.process_labels()).unwrap();
        
     // Save the file with new content.
     writer.flush().expect("Err Flushing To File");

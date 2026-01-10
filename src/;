@@ -50,7 +50,6 @@ pub struct FunctionDeclaration {
     pub args : Vec<FunctionArg>,
     pub name : String,
     pub return_type : VariableType,
-    pub body : Vec<Statement>,
     pub args_stack_mem_allocated : usize
 }
 
@@ -66,7 +65,6 @@ pub enum Statements {
     Assignment(Assignment),
     VariableDeclaration(VariableDeclaration),
     FunctionDeclaration(FunctionDeclaration),
-    Compare(Compare),
     StackFramePop,
     Expression(Expression),
 }
@@ -77,11 +75,12 @@ pub enum BuiltInFunctionsAst {
     Format(Format),
     StackOffset(String),
     BranchLinked(BranchLinkedAst),
+    Compare(Compare)
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Compare {
-    pub expressions : [Expression; 2],
+    pub expressions : [String; 2],
 }
 
 #[derive(Debug, PartialEq, Clone)]

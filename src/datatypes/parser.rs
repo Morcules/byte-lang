@@ -1,6 +1,6 @@
 use std::panic;
 
-use crate::datatypes::ast_statements::{Assignment, BranchLinkedAst, BuiltInFunctionsAst, Expression, Format, Function, FunctionArg, FunctionDeclaration, Literal, MemoryLocationsAst, Statement, Statements, VariableDeclaration, VariableType};
+use crate::datatypes::ast_statements::{Assignment, BranchLinkedAst, BuiltInFunctionsAst, Compare, Expression, Format, Function, FunctionArg, FunctionDeclaration, Literal, MemoryLocationsAst, Statement, Statements, VariableDeclaration, VariableType};
 use crate::datatypes::general_functions::align_memory;
 use crate::datatypes::program_data::ProgramData;
 use crate::datatypes::token::{BuiltInFunctions, Identifiers, Keywords, MemoryLocations, Operators, Punctuations, Token, TokenType};
@@ -25,11 +25,14 @@ macro_rules! throw_err {
 pub struct Parser<'a> {
     program_data: &'a mut ProgramData,
     position: usize,
+    // True = pop stack frame on nearest '};
+    // False = don't pop stack frame
+    scope_behaviour: Vec<bool>
 }
 
 impl<'a> Parser<'a> {
     pub fn new(program_data: &'a mut ProgramData) -> Self {
-        return Self{program_data, position: 0};
+        return Self{program_data, position: 0, scope_behaviour: Vec::new()};
     }
 
     pub fn parse_all(&mut self) -> () {
@@ -198,11 +201,27 @@ impl<'a> Parser<'a> {
 
         expect_token_with_err!(TokenType::Punctuation(Punctuations::OpenBraces), self);
 
+        let mut body : Vec<Statement> = Vec::new();
+
+        loop {
+            if self.current_token().kind == TokenType::Punctuation(Punctuations::ClosedBraces) {
+                self.advance_position();
+                break;
+            }
+
+            let parsed = self.parse_next();
+
+            if let Some(statement) = parsed {
+                body.push(statement);
+            }
+        }
+
         return Some(Statement::new(first_token, self.current_token().end_pos, Statements::FunctionDeclaration(FunctionDeclaration{
             args,
             name : func_name,
             return_type: func_return_type,
-            args_stack_mem_allocated: align_memory(stack_mem_allocated, 16)
+            args_stack_mem_allocated: align_memory(stack_mem_allocated, 16),
+            body: body
         })));
     }
 
@@ -335,6 +354,14 @@ impl<'a> Parser<'a> {
             TokenType::Punctuation(Punctuations::ClosedBraces) => {
                 self.advance_position();
 
+                if self.scope_behaviour.last().unwrap().clone() == false {
+                    self.scope_behaviour.pop();
+
+                    return None;
+                }
+
+                self.scope_behaviour.pop();
+
                 return Some(Statement::new(&token, token.end_pos, Statements::StackFramePop))
             },
             TokenType::Keyword(keyword) => {
@@ -418,6 +445,35 @@ impl<'a> Parser<'a> {
                     }
                 }
             },
+            TokenType::BuiltInFunctions(BuiltInFunctions::Compare) => {
+                self.advance_position();
+
+                expect_token_with_err!(TokenType::Punctuation(Punctuations::OpenParenthesis), self);
+
+                let first_expr = self.handle_expr();
+
+                let Some(first_expr_unwrapped) = first_expr else {
+                    throw_err!(self, "invalid expr in compare");
+                };
+
+                expect_token_with_err!(TokenType::Punctuation(Punctuations::Comma), self);
+
+                let second_expr = self.handle_expr();
+
+                let Some(second_expr_unwrapped) = second_expr else {
+                    throw_err!(self, "invalid expr in compare");
+                };
+                
+                expect_token_with_err!(TokenType::Punctuation(Punctuations::ClosedParenthesis), self);
+
+                let end_pos = self.current_token().end_pos.clone();
+
+                expect_token_with_err!(TokenType::Punctuation(Punctuations::OpenBraces), self);
+
+                self.scope_behaviour.push(false);
+
+                return Some(Statement::new(&token, end_pos, Statements::Compare(Compare{expressions: [first_expr_unwrapped, second_expr_unwrapped]})))
+            },
             TokenType::BuiltInFunctions(BuiltInFunctions::BranchLinked) => {
                 self.advance_position();
 
@@ -468,6 +524,33 @@ impl<'a> Parser<'a> {
                 throw_err!(self, "Syntax Error");
             }
         };
+    }
+
+    pub fn handle_expr(&mut self) -> Option<Expression> {
+        match self.current_token().kind.clone() {
+            TokenType::Literal(literal) => {
+                self.advance_position();
+
+                return Some(Expression::Literal(literal));
+            },
+            TokenType::BuiltInFunctions(_) => {
+                let Some(parsed_func) = self.parse_next() else {
+                    return None;
+                };
+
+                let Statements::Expression(expr) = parsed_func.statement_type else {
+                    return None;
+                };
+
+                Some(expr)
+            },
+            TokenType::Identifiers(Identifiers::Identifier(identifier)) => {
+                self.advance_position();
+
+                Some(Expression::Identifier(Identifiers::Identifier(identifier)))
+            },
+            _ => return None
+        }
     }
 
     pub fn handle_error(&mut self, error : &str) -> () {

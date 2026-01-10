@@ -6,7 +6,7 @@ macro_rules! throw_err {
     ($self:expr, $error:expr) => {
         $self.throw_err($error);
 
-        continue;
+        return;
     };
 }
 
@@ -21,61 +21,61 @@ impl<'a> ScopeAnalysis<'a> {
         return Self{position : 0, scope_stack: Vec::new(), program_data};
     }
 
-    pub fn process_all(&mut self) -> () {
-        let mut current_function = String::new();
+    pub fn process_statement(&mut self, statement : &Statement) -> () {
+        if let Statements::FunctionDeclaration(func_declaration) = statement.statement_type.clone() {
+            if self.scope_stack.len() != 0 {
+                throw_err!(self, "Scope len invalid");
+            }
 
+            if self.program_data.functions.get(&func_declaration.name).is_some() {
+                throw_err!(self, &format!("Duplicate function: {}", func_declaration.name));
+            }
+
+            let stack_frame_index = self.program_data.stack_frames.len();
+
+            self.program_data.stack_frames.push(StackFrame::default(func_declaration.name.clone()));
+
+            self.program_data.functions.insert(func_declaration.name.clone(), Function{first_stack_frame: stack_frame_index, args: func_declaration.args, return_type: func_declaration.return_type, stack_mem_allocated: func_declaration.args_stack_mem_allocated});
+
+            self.scope_stack.push(stack_frame_index);
+
+            for func_statement in func_declaration.body {
+                self.process_statement(&func_statement);
+            }
+
+            self.pop_scope();
+
+            return;
+        } else if statement.statement_type == Statements::EOF {
+            return;
+        }
+
+        match statement.statement_type.clone() {
+            Statements::Expression(Expression::BuiltInFunction(BuiltInFunctionsAst::BranchLinked(bl))) => {
+                self.add_statement_to_current_stack_frame(statement);
+            },
+            Statements::VariableDeclaration(var_declaration) => {
+                self.add_var_to_stack_frame(&var_declaration);
+
+                self.add_statement_to_current_stack_frame(statement);
+            },
+            _ => {
+                self.add_statement_to_current_stack_frame(statement);
+            }
+        };
+    }
+
+    pub fn process_all(&mut self) -> () {
         loop {
             let current_statement = self.current_statement().clone();
 
             print!(" {:?} ", current_statement);
             
-            if current_function.is_empty() {
-                if let Statements::FunctionDeclaration(func_declaration) = current_statement.statement_type.clone() {
-                    if self.program_data.functions.get(&func_declaration.name).is_some() {
-                        throw_err!(self, &format!("Duplicate function: {}", func_declaration.name));
-                    }
-
-                    let stack_frame_index = self.program_data.stack_frames.len();
-
-                    self.program_data.stack_frames.push(StackFrame::default(func_declaration.name.clone()));
-
-                    self.program_data.functions.insert(func_declaration.name.clone(), Function{first_stack_frame: stack_frame_index, args: func_declaration.args, return_type: func_declaration.return_type, stack_mem_allocated: func_declaration.args_stack_mem_allocated});
-
-                    self.scope_stack.push(stack_frame_index);
-
-                    current_function = func_declaration.name;
-
-                    continue;
-                } else if current_statement.statement_type == Statements::EOF {
-                    break;
-                } else {
-                    throw_err!(self, &format!("Found statement outside function: Statement {:?}", current_statement));
-                }
+            if current_statement.statement_type == Statements::EOF {
+                break;
             }
 
-            match current_statement.statement_type.clone() {
-                Statements::Expression(Expression::BuiltInFunction(BuiltInFunctionsAst::BranchLinked(bl))) => {
-                    self.add_statement_to_current_stack_frame(current_statement);
-                },
-                Statements::VariableDeclaration(var_declaration) => {
-                    self.add_var_to_stack_frame(&var_declaration);
-
-                    self.add_statement_to_current_stack_frame(current_statement);
-                },
-                Statements::StackFramePop => {
-                    self.pop_scope();
-
-                    if self.scope_stack.len() == 0 {
-                        current_function = String::default();
-                    }
-                },
-                Statements::EOF => {
-                    break;
-                },
-                _ => {
-                    self.add_statement_to_current_stack_frame(current_statement);
-                }
-            };
+            self.process_statement(&current_statement);
             
             self.advance_position();
         }
@@ -106,8 +106,8 @@ impl<'a> ScopeAnalysis<'a> {
         return;
     }
 
-    pub fn add_statement_to_current_stack_frame(&mut self, statement : Statement) -> () {
-        self.get_current_stack_frame().statements.push(statement);
+    pub fn add_statement_to_current_stack_frame(&mut self, statement : &Statement) -> () {
+        self.get_current_stack_frame().statements.push(statement.clone());
 
         return;
     }
