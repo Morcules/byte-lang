@@ -82,6 +82,7 @@ pub enum BuiltInFunctionsAst {
 #[derive(Debug, PartialEq, Clone)]
 pub struct Compare {
     pub expressions : [Expression; 2],
+    pub conditions : Vec<CmpCondition>
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -241,8 +242,15 @@ pub struct CgStatement {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum CgStatementType {
+    Compare(CgCompare),
     VariableAssignment(CgVariableAssignment),
     BuiltInFunction(CgBuiltInFunctions)
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct CgCompare {
+    pub conditions : Vec<CmpCondition>,
+    pub expressions : [CgExpression; 2]
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -279,4 +287,47 @@ pub struct CgVariableAssignment {
     pub assign_value : CgExpression,
     pub stack_offset : usize,
     pub variable_type : VariableType
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum CmpConditionType {
+    Equal,
+    NotEqual
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct CmpCondition {
+    pub condition_type : CmpConditionType,
+    pub body : Vec<Statement>,
+    pub stack_frame : usize
+}
+
+impl CmpCondition {
+    pub fn new(condition_type : CmpConditionType) -> Self {
+        return Self{condition_type, body: Vec::new(), stack_frame: 0};
+    }
+
+    pub fn set_body(&mut self, body : Vec<Statement>) -> () {
+        self.body = body;
+    }
+
+    pub fn from_token(input : &Token) -> Option<Self> {
+        if let TokenType::Identifiers(Identifiers::Identifier(identifier)) = input.kind.clone() {
+            let cmp_type : CmpConditionType = match identifier.as_str() {
+                "eq" => {
+                    CmpConditionType::Equal
+                },
+                "ne" => {
+                    CmpConditionType::NotEqual
+                },
+                _ => {
+                    return None;
+                }
+            };
+
+            return Some(CmpCondition::new(cmp_type));
+        }
+
+        return None;
+    }
 }

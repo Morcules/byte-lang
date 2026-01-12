@@ -10,12 +10,26 @@ pub mod asm {
         StackFramePointer
     }
 
-    pub fn temp_reg_for_type(var_type : VariableType, load_instruction : bool) -> String {
+    pub enum TempRegisters {
+        T0,
+        T1,
+        T2
+    }
+
+    pub fn temp_reg_for_type(var_type : VariableType, load_instruction : bool, reg : TempRegisters) -> String {
+        let temp_registers : [&str; 2] = {
+            match reg {
+                TempRegisters::T0 => ["x10", "w10"],
+                TempRegisters::T1 => ["x11", "w11"],
+                TempRegisters::T2 => ["x12", "w12"]
+            }
+        };
+
         let res : &str = match var_type {
-            VariableType::U8 | VariableType::U16 | VariableType::U32 => "w10",
-            VariableType::I64 | VariableType::U64 => "x10",
+            VariableType::U8 | VariableType::U16 | VariableType::U32 => temp_registers[1],
+            VariableType::I64 | VariableType::U64 => temp_registers[0],
             VariableType::I8 | VariableType::I16 | VariableType::I32 => {
-                if load_instruction { "x10" } else { "w10" }
+                if load_instruction { temp_registers[0] } else { temp_registers[1] }
             }
 
             _ => unreachable!(),
@@ -25,7 +39,7 @@ pub mod asm {
     }
 
     pub fn store_literal_to_stack(var_type : VariableType, num : i64, offset : usize) -> String {
-        let temp_reg = temp_reg_for_type(var_type.clone(), false);
+        let temp_reg = temp_reg_for_type(var_type.clone(), false, TempRegisters::T0);
 
         return format!("mov {}, #{}\n{} {}, [sp, #{}]\n", temp_reg, num, store_instruction_for_type(var_type), temp_reg, offset);
     }

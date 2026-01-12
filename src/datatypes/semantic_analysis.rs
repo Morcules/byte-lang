@@ -1,6 +1,6 @@
-use std::{collections::HashMap, panic};
+use std::{collections::HashMap, mem::zeroed, panic};
 
-use crate::datatypes::{ast_statements::{AstIdentifiers, BuiltInFunctionsAst, CgBranchLinked, CgBuiltInFunctions, CgExpression, CgIdentifiers, CgStatement, CgStatementType, CgVariableAssignment, Expression, FunctionArg, Literal, StackVariableData, Statement, Statements, VariableType}, general_functions::align_memory, program_data::ProgramData, stack_frame::{StackFrame, StackVariable}, token::Identifiers};
+use crate::datatypes::{ast_statements::{AstIdentifiers, BuiltInFunctionsAst, CgBranchLinked, CgBuiltInFunctions, CgCompare, CgExpression, CgIdentifiers, CgStatement, CgStatementType, CgVariableAssignment, Expression, FunctionArg, Literal, StackVariableData, Statement, Statements, VariableType}, general_functions::align_memory, program_data::ProgramData, stack_frame::{StackFrame, StackVariable}, token::Identifiers};
 
 macro_rules! throw_err {
     ($self:expr, $error:expr) => {
@@ -29,6 +29,26 @@ impl<'a> SemanticAnaytis<'a> {
                 };
 
                 return;
+            },
+            Statements::Compare(cmp) => {
+                let mut cg_expressions : [CgExpression; 2] = unsafe {
+                    std::mem::zeroed()
+                };
+
+                for i in 0..2 {
+                    let expr = cmp.expressions[i].clone();
+
+                    let cg_expr = self.expression_to_cg(stack_frame, expr);
+
+                    if let Some(cg_expr_unwrapped) = cg_expr {
+                        cg_expressions[i] = cg_expr_unwrapped;
+                        continue;
+                    } else {
+                        throw_err!(self, "Failed to parse expr inside cmp");
+                    }
+                }
+
+                self.add_cg_statement_to_stack_frame(stack_frame, CgStatement{statement_type: CgStatementType::Compare(CgCompare{conditions: cmp.conditions, expressions: cg_expressions})});
             },
             Statements::Assignment(assignment) => {
                 self.initialize_identifier(&assignment.identifier, &assignment.expression, stack_frame);

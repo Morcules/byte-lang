@@ -1,6 +1,6 @@
 use std::panic;
 
-use crate::datatypes::ast_statements::{Assignment, BranchLinkedAst, BuiltInFunctionsAst, Compare, Expression, Format, Function, FunctionArg, FunctionDeclaration, Literal, MemoryLocationsAst, Statement, Statements, VariableDeclaration, VariableType};
+use crate::datatypes::ast_statements::{Assignment, BranchLinkedAst, BuiltInFunctionsAst, CmpCondition, Compare, Expression, Format, Function, FunctionArg, FunctionDeclaration, Literal, MemoryLocationsAst, Statement, Statements, VariableDeclaration, VariableType};
 use crate::datatypes::general_functions::align_memory;
 use crate::datatypes::program_data::ProgramData;
 use crate::datatypes::token::{BuiltInFunctions, Identifiers, Keywords, MemoryLocations, Operators, Punctuations, Token, TokenType};
@@ -201,20 +201,7 @@ impl<'a> Parser<'a> {
 
         expect_token_with_err!(TokenType::Punctuation(Punctuations::OpenBraces), self);
 
-        let mut body : Vec<Statement> = Vec::new();
-
-        loop {
-            if self.current_token().kind == TokenType::Punctuation(Punctuations::ClosedBraces) {
-                self.advance_position();
-                break;
-            }
-
-            let parsed = self.parse_next();
-
-            if let Some(statement) = parsed {
-                body.push(statement);
-            }
-        }
+        let body : Vec<Statement> = self.parse_braces_body();
 
         return Some(Statement::new(first_token, self.current_token().end_pos, Statements::FunctionDeclaration(FunctionDeclaration{
             args,
@@ -466,13 +453,49 @@ impl<'a> Parser<'a> {
                 
                 expect_token_with_err!(TokenType::Punctuation(Punctuations::ClosedParenthesis), self);
 
-                let end_pos = self.current_token().end_pos.clone();
-
                 expect_token_with_err!(TokenType::Punctuation(Punctuations::OpenBraces), self);
 
-                self.scope_behaviour.push(false);
+                let mut conditions : Vec<CmpCondition> = Vec::new();
 
-                return Some(Statement::new(&token, end_pos, Statements::Compare(Compare{expressions: [first_expr_unwrapped, second_expr_unwrapped]})))
+                let end_pos : usize;
+
+                loop {
+                    match self.current_token().kind {
+                        TokenType::Punctuation(Punctuations::Dot) => {
+                            self.advance_position();
+
+                            let cmp_condition = CmpCondition::from_token(&self.current_token());
+                            
+                            self.advance_position();
+
+                            let Some(mut cmp_condition_unwrapped) = cmp_condition else {
+                                throw_err!(self, "Invalid cmp condition given");
+                            };
+
+                            expect_token_with_err!(TokenType::Punctuation(Punctuations::OpenBraces), self);
+
+                            let cmp_condition_body = self.parse_braces_body();
+
+                            cmp_condition_unwrapped.set_body(cmp_condition_body);
+
+                            conditions.push(cmp_condition_unwrapped);
+
+                            continue;
+                        },
+                        TokenType::Punctuation(Punctuations::ClosedBraces) => {
+                            end_pos = self.current_token().end_pos.clone();
+
+                            self.advance_position();
+
+                            break;
+                        },
+                        _ => {
+                            throw_err!(self, "Invalid token inside cmp");
+                        }
+                    }
+                }
+
+                return Some(Statement::new(&token, end_pos, Statements::Compare(Compare{conditions: conditions, expressions: [first_expr_unwrapped, second_expr_unwrapped]})))
             },
             TokenType::BuiltInFunctions(BuiltInFunctions::BranchLinked) => {
                 self.advance_position();
@@ -542,6 +565,8 @@ impl<'a> Parser<'a> {
                     return None;
                 };
 
+                self.advance_position();
+
                 Some(expr)
             },
             TokenType::Identifiers(Identifiers::Identifier(identifier)) => {
@@ -572,6 +597,25 @@ impl<'a> Parser<'a> {
 
     pub fn advance_position(&mut self) -> () {
         self.position += 1;
+    }
+
+    pub fn parse_braces_body(&mut self) -> Vec<Statement> {
+        let mut body : Vec<Statement> = Vec::new();
+
+        loop {
+            if self.current_token().kind == TokenType::Punctuation(Punctuations::ClosedBraces) {
+                self.advance_position();
+                break;
+            }
+
+            let parsed = self.parse_next();
+
+            if let Some(statement) = parsed {
+                body.push(statement);
+            }
+        }
+
+        return body;
     }
 
     pub fn current_token(&mut self) -> Token {

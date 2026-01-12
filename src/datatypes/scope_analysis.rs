@@ -21,8 +21,8 @@ impl<'a> ScopeAnalysis<'a> {
         return Self{position : 0, scope_stack: Vec::new(), program_data};
     }
 
-    pub fn process_statement(&mut self, statement : &Statement) -> () {
-        if let Statements::FunctionDeclaration(func_declaration) = statement.statement_type.clone() {
+    pub fn process_statement(&mut self, statement : &mut Statement) -> () {
+        if let Statements::FunctionDeclaration(func_declaration) = &mut statement.statement_type {
             if self.scope_stack.len() != 0 {
                 throw_err!(self, "Scope len invalid");
             }
@@ -35,12 +35,12 @@ impl<'a> ScopeAnalysis<'a> {
 
             self.program_data.stack_frames.push(StackFrame::default(func_declaration.name.clone()));
 
-            self.program_data.functions.insert(func_declaration.name.clone(), Function{first_stack_frame: stack_frame_index, args: func_declaration.args, return_type: func_declaration.return_type, stack_mem_allocated: func_declaration.args_stack_mem_allocated});
+            self.program_data.functions.insert(func_declaration.name.clone(), Function{first_stack_frame: stack_frame_index, args: func_declaration.args.clone(), return_type: func_declaration.return_type.clone(), stack_mem_allocated: func_declaration.args_stack_mem_allocated});
 
             self.scope_stack.push(stack_frame_index);
 
-            for func_statement in func_declaration.body {
-                self.process_statement(&func_statement);
+            for func_statement in &mut func_declaration.body {
+                self.process_statement(func_statement);
             }
 
             self.pop_scope();
@@ -50,7 +50,22 @@ impl<'a> ScopeAnalysis<'a> {
             return;
         }
 
-        match statement.statement_type.clone() {
+        match &mut statement.statement_type {
+            Statements::Compare(cmp) => {
+                for condition in &mut cmp.conditions {
+                    let stack_frame_index = self.create_new_scope();
+
+                    condition.stack_frame = stack_frame_index;
+
+                    for condition_statement in &mut condition.body {
+                        self.process_statement(condition_statement);
+                    }
+
+                    self.pop_scope();
+                }
+
+                self.add_statement_to_current_stack_frame(statement);
+            }
             Statements::Expression(Expression::BuiltInFunction(BuiltInFunctionsAst::BranchLinked(bl))) => {
                 self.add_statement_to_current_stack_frame(statement);
             },
@@ -67,7 +82,7 @@ impl<'a> ScopeAnalysis<'a> {
 
     pub fn process_all(&mut self) -> () {
         loop {
-            let current_statement = self.current_statement().clone();
+            let mut current_statement = self.current_statement().clone();
 
             print!(" {:?} ", current_statement);
             
@@ -75,7 +90,7 @@ impl<'a> ScopeAnalysis<'a> {
                 break;
             }
 
-            self.process_statement(&current_statement);
+            self.process_statement(&mut current_statement);
             
             self.advance_position();
         }
@@ -83,7 +98,7 @@ impl<'a> ScopeAnalysis<'a> {
         print!("\n");
     }
 
-    pub fn create_new_scope(&mut self) -> () {
+    pub fn create_new_scope(&mut self) -> usize {
         let new_frame_index = self.program_data.stack_frames.len();
 
         let parent = self.scope_stack.last().unwrap().clone();
@@ -95,7 +110,7 @@ impl<'a> ScopeAnalysis<'a> {
 
         self.scope_stack.push(new_frame_index);
 
-        return;
+        return new_frame_index;
     }
 
     pub fn throw_err(&mut self, err : &str) -> () {
@@ -164,8 +179,8 @@ impl<'a> ScopeAnalysis<'a> {
         return self.scope_stack.last().unwrap().clone();
     }
 
-    pub fn current_statement(&self) -> &Statement {
-        return &self.program_data.statements.get(self.position).unwrap();
+    pub fn current_statement(&mut self) -> &mut Statement {
+        return self.program_data.statements.get_mut(self.position).unwrap();
     }
 
     pub fn advance_position(&mut self) -> () {

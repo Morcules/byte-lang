@@ -22,6 +22,17 @@ void : main() {
     u8 something_clone = something;
     i64 exit_code_success = 0;
 
+    cmp(something, something_clone) {
+        .ne {
+            i64 test_integer = 5;
+
+            test_integer = 10;
+        }
+        .eq {
+
+        }
+    }
+
     exit_code_success = 1;
 
     bl(test, var, exit_code_clone);

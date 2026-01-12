@@ -15,6 +15,9 @@ impl<'a> CodeGenerator<'a> {
 
     pub fn process_statement(&mut self, statement : &CgStatement, label: &str, stack_frame : usize) -> () {
         match statement.statement_type.clone() {
+            CgStatementType::Compare(cmp) => {
+                
+            },
             CgStatementType::VariableAssignment(var_init) => {
                 let compiled_code = &self.init_var(var_init.stack_offset, var_init.variable_type.clone(), var_init.assign_value);
 
@@ -104,6 +107,10 @@ impl<'a> CodeGenerator<'a> {
             _ => unreachable!()
         }
     }
+    
+    pub fn expr_to_reg(&mut self, reg : &str) -> () {
+
+    }
 
     pub fn initialize_stack_frame(&mut self, label: &str, stack_frame : usize) -> () {
         let mem = self.get_stack_frame_by_index(stack_frame).stack_mem_allocated.clone();
@@ -167,7 +174,9 @@ impl<'a> CodeGenerator<'a> {
         self.process_stack_frame(stack_frame_index, label);
 
         for child in children.iter() {
-            self.traverse_stack_frame_children(child.clone(), label);
+            self.labels.insert(child.to_string(), String::new());
+
+            self.traverse_stack_frame_children(child.clone(), &child.to_string());
         }
     }
 
