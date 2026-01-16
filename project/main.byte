@@ -15,6 +15,7 @@ void : main() {
     i64 var = 5;
     i16 var2 = 2;
     i8 var3 = 1;
+    u8 char = 'a';
     i64 exit_code = 30;
     i64 exit_code_clone = exit_code;
     u64 test = 5;

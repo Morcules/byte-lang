@@ -69,6 +69,23 @@ impl<'a> Tokenizer<'a> {
                     return None;
                 }
             }
+            '\'' => {
+                self.advance(1);
+
+                let char = self.current_char();
+
+                let literal_res = char as u8;
+
+                self.advance(1);
+
+                if self.current_char() != '\'' {
+                    panic!()
+                }
+
+                self.advance(1);
+
+                return Some(Token{kind: TokenType::Literal(Literal::Number(literal_res as i64)), col: self.col, line: self.line, start_pos, end_pos: self.position});
+            },
             '"' => {
                 let mut str = String::new();
 
