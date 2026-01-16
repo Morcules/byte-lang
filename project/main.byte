@@ -23,6 +23,10 @@ void : main() {
     u8 something = 30;
     u8 something_clone = something;
     i64 exit_code_success = 0;
+    array[u8, 12] string;
+    //array[u8, 12] string = "hello world\0";//
+    array[u8, 2] arr;
+    //array[u8, 2] arr = [1, 2];//
 
     cmp(test2, test) {
         .ne {

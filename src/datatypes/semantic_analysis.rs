@@ -84,20 +84,7 @@ impl<'a> SemanticAnaytis<'a> {
                             let cg_expression = self.expression_to_cg(stack_frame, branch_linked.args.get(i).unwrap().clone());
 
                             if let Some(cg_expression_unwrapped) = cg_expression {
-                                let valid : bool = match (cg_expression_unwrapped.clone(), bl_function.args.get(i).unwrap().arg_var_type.clone()) {
-                                    (
-                                        CgExpression::Literal(Literal::Number(_)),
-                                        VariableType::I8 | VariableType::I16 | VariableType::I32 | VariableType::I64 |
-                                        VariableType::U8 | VariableType::U16 | VariableType::U32 | VariableType::U64
-                                    ) => true,
-                                    (
-                                        CgExpression::Identifier(CgIdentifiers::StackVariableData(stack_var_data)),
-                                        _
-                                    ) => {
-                                        stack_var_data.variable_type == bl_function.args.get(i).unwrap().arg_var_type
-                                    },
-                                    _ => false
-                                };
+                                let valid = self.validate_cg_expr_with_var(&cg_expression_unwrapped, &bl_function.args.get(i).unwrap().arg_var_type);
 
                                 if !valid {
                                     throw_err!(self, "Invalid args in bl");
@@ -252,6 +239,25 @@ impl<'a> SemanticAnaytis<'a> {
         } else {
             throw_err!(self, "Expected assignment of valid identifier");
         }
+    }
+
+    pub fn validate_cg_expr_with_var(&self, cg_expr : &CgExpression, var_type : &VariableType) -> bool {
+        let valid : bool = match (cg_expr, var_type) {
+            (
+                CgExpression::Literal(Literal::Number(_)),
+                VariableType::I8 | VariableType::I16 | VariableType::I32 | VariableType::I64 |
+                VariableType::U8 | VariableType::U16 | VariableType::U32 | VariableType::U64
+            ) => true,
+            (
+                CgExpression::Identifier(CgIdentifiers::StackVariableData(stack_var_data)),
+                _
+            ) => {
+                stack_var_data.variable_type == *var_type
+            },
+            _ => false
+        };
+
+        return valid;
     }
     
     pub fn get_random_label_num(&mut self) -> usize {
