@@ -47,7 +47,8 @@ pub enum BuiltInFunctions {
     Format,
     StackOffset,   
     Branch,
-    BranchLinked
+    BranchLinked,
+    
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -59,6 +60,7 @@ pub enum Punctuations {
     ClosedBraces,
     OpenSquareBracket,
     ClosedSquareBracket,
+    Dot,
     Comma,
     Semicolon
 }

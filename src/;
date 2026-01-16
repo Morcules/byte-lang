@@ -16,7 +16,6 @@ pub struct Function {
     pub return_type: VariableType,
     pub args: Vec<FunctionArg>,
     pub first_stack_frame: usize,
-    pub arg_stack_mem_allocated: usize,
     pub stack_mem_allocated: usize
 }
 
@@ -51,7 +50,6 @@ pub struct FunctionDeclaration {
     pub args : Vec<FunctionArg>,
     pub name : String,
     pub return_type : VariableType,
-    pub body : Vec<Statement>,
     pub args_stack_mem_allocated : usize
 }
 
@@ -67,7 +65,6 @@ pub enum Statements {
     Assignment(Assignment),
     VariableDeclaration(VariableDeclaration),
     FunctionDeclaration(FunctionDeclaration),
-    Compare(Compare),
     StackFramePop,
     Expression(Expression),
 }
@@ -78,12 +75,12 @@ pub enum BuiltInFunctionsAst {
     Format(Format),
     StackOffset(String),
     BranchLinked(BranchLinkedAst),
+    Compare(Compare)
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Compare {
-    pub expressions : [Expression; 2],
-    pub conditions : Vec<CmpCondition>
+    pub expressions : [String; 2],
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -102,7 +99,7 @@ impl BuiltInFunctionsAst {
     pub fn parse(&self, program_data : &mut ProgramData, stack_frame : usize) -> Option<Literal> {
         return match self {
             BuiltInFunctionsAst::StackOffset(identifier) => {
-                if let Some(var) = program_data.get_stack_variable_ref(stack_frame, identifier) {
+                if let Some(var) = program_data.get_stack_variable_ref(stack_frame, identifier, 0) {
                     Some(Literal::Number(var.local_offset as i64))
                 } else if let Some(arg) = program_data.get_function_stack_arg_ref(stack_frame, identifier) {
                     Some(Literal::Number(arg.local_offset as i64))
@@ -243,28 +240,14 @@ pub struct CgStatement {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum CgStatementType {
-    Compare(CgCompare),
     VariableAssignment(CgVariableAssignment),
     BuiltInFunction(CgBuiltInFunctions)
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct CgCompare {
-    pub conditions : Vec<CmpCondition>,
-    pub expressions : [CgExpression; 2],
-    pub new_exit_label : String
-}
-
-#[derive(Debug, PartialEq, Clone)]
 pub enum CgBuiltInFunctions {
     Assembly(String),
-    BranchLinked(CgBranchLinked),
-    Branch(CgBranch)
-}
-
-#[derive(Debug, PartialEq, Clone)]
-pub struct CgBranch {
-    pub branch_name : String
+    BranchLinked(CgBranchLinked)
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -295,56 +278,4 @@ pub struct CgVariableAssignment {
     pub assign_value : CgExpression,
     pub stack_offset : usize,
     pub variable_type : VariableType
-}
-
-#[derive(Debug, PartialEq, Clone)]
-pub enum CmpConditionType {
-    Equal,
-    NotEqual
-}
-
-#[derive(Debug, PartialEq, Clone)]
-pub struct CmpCondition {
-    pub condition_type : CmpConditionType,
-    pub body : Vec<Statement>,
-    pub stack_frame : usize
-}
-
-impl CmpCondition {
-    pub fn new(condition_type : CmpConditionType) -> Self {
-        return Self{condition_type, body: Vec::new(), stack_frame: 0};
-    }
-
-    pub fn set_body(&mut self, body : Vec<Statement>) -> () {
-        self.body = body;
-    }
-
-    pub fn to_string(&self) -> String {
-        let res = match self.condition_type {
-            CmpConditionType::Equal => "eq",
-            CmpConditionType::NotEqual => "ne"
-        };
-
-        return String::from(res);
-    }
-
-    pub fn from_token(input : &Token) -> Option<Self> {
-        if let TokenType::Identifiers(Identifiers::Identifier(identifier)) = input.kind.clone() {
-            let cmp_type : CmpConditionType = match identifier.as_str() {
-                "eq" => {
-                    CmpConditionType::Equal
-                },
-                "ne" => {
-                    CmpConditionType::NotEqual
-                },
-                _ => {
-                    return None;
-                }
-            };
-
-            return Some(CmpCondition::new(cmp_type));
-        }
-
-        return None;
-    }
 }

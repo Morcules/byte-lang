@@ -48,7 +48,7 @@ impl<'a> Tokenizer<'a> {
         let start_pos = self.position;
 
         match self.current_char() {
-            '\n' | ';' | '(' | ')' | ',' | '[' | ']' | '{' | '}' => {
+            '\n' | ';' | '(' | ')' | ',' | '[' | ']' | '{' | '}' | '.' => {
                 res = String::from(self.current_char());
                 self.advance(1);
             },
@@ -149,6 +149,12 @@ impl<'a> Tokenizer<'a> {
             }
             "," => {
                 return Some(Token{kind: TokenType::Punctuation(Punctuations::Comma), ..token_default});
+            },
+            "." => {
+                return Some(Token{kind: TokenType::Punctuation(Punctuations::Dot), ..token_default});
+            },
+            "cmp" => {
+                return Some(Token{kind: TokenType::BuiltInFunctions(BuiltInFunctions::Compare), ..token_default});
             },
             "bl" => {
                 return Some(Token{kind: TokenType::BuiltInFunctions(BuiltInFunctions::BranchLinked), ..token_default});
