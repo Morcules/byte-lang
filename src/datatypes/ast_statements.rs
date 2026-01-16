@@ -205,6 +205,18 @@ impl Literal {
 }
 
 #[derive(Debug, PartialEq, Clone)]
+pub struct ArrayType {
+    pub item_count : usize,
+    pub variable_type : Box<VariableType>
+}
+
+impl ArrayType {
+    pub fn none() -> Self {
+        return Self { item_count: 0, variable_type: Box::new(VariableType::Void) }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
 pub enum VariableType {
     I8,
     I16,
@@ -214,7 +226,8 @@ pub enum VariableType {
     U16,
     U32,
     U64,
-    Void
+    Void,
+    Array(ArrayType)
 }
 
 impl VariableType {
@@ -229,6 +242,7 @@ impl VariableType {
             VariableType::U16 => 2,
             VariableType::U32 => 4,
             VariableType::U64 => 8,
+            VariableType::Array(arr) => arr.item_count * arr.variable_type.get_variable_size(),
             VariableType::Void => 0
         }
     }

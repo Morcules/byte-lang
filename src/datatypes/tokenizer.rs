@@ -1,4 +1,4 @@
-use crate::datatypes::{ast_statements::{Literal, VariableType}, program_data::ProgramData, token::{BuiltInFunctions, Identifiers, Keywords, MemoryLocations, Operators, Punctuations, Token, TokenType}};
+use crate::datatypes::{ast_statements::{ArrayType, Literal, VariableType}, program_data::ProgramData, token::{BuiltInFunctions, Identifiers, Keywords, MemoryLocations, Operators, Punctuations, Token, TokenType}};
 
 // Tokenzer struct
 pub struct Tokenizer<'a> {
@@ -185,7 +185,7 @@ impl<'a> Tokenizer<'a> {
             "asm" => {
                 return Some(Token{kind: TokenType::BuiltInFunctions(BuiltInFunctions::Assembly), ..token_default});
             }
-            "i64" | "i32" | "i16" | "i8" | "u64" | "u32" | "u16" | "u8" | "void" => {
+            "i64" | "i32" | "i16" | "i8" | "u64" | "u32" | "u16" | "u8" | "void" | "array" => {
                 return Some(Token{kind: TokenType::Keyword(Keywords::VariableType(
                     match &res as &str {
                         "i64" => VariableType::I64,
@@ -197,6 +197,7 @@ impl<'a> Tokenizer<'a> {
                         "u16" => VariableType::U16,
                         "u8" => VariableType::U8,
                         "void" => VariableType::Void,
+                        "array" => VariableType::Array(ArrayType::none()),
                         _ => unreachable!()
                     }
                 )), ..token_default});
