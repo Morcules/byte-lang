@@ -1,6 +1,6 @@
 use std::panic;
 
-use crate::datatypes::ast_statements::{ArrayType, Assignment, BranchLinkedAst, BuiltInFunctionsAst, CmpCondition, Compare, Expression, Format, Function, FunctionArg, FunctionDeclaration, Literal, MemoryLocationsAst, Statement, Statements, VariableDeclaration, VariableType};
+use crate::datatypes::ast_statements::{ArrayLiteral, ArrayType, Assignment, BranchLinkedAst, BuiltInFunctionsAst, CmpCondition, Compare, Expression, Format, Function, FunctionArg, FunctionDeclaration, Literal, MemoryLocationsAst, Statement, Statements, VariableDeclaration, VariableType};
 use crate::datatypes::general_functions::align_memory;
 use crate::datatypes::program_data::ProgramData;
 use crate::datatypes::token::{BuiltInFunctions, Identifiers, Keywords, MemoryLocations, Operators, Punctuations, Token, TokenType};
@@ -226,27 +226,13 @@ impl<'a> Parser<'a> {
                 if operator == Operators::Assignment {
                     self.advance_position();
 
-                    let value = self.current_token();
-
-                    let option_value : Option<Expression> = match value.kind {
-                        TokenType::Literal(identifier) => {
-                            match identifier {
-                                Literal::String(string_val) => Some(Expression::Literal(Literal::String(string_val))),
-                                Literal::Number(num_val) => Some(Expression::Literal(Literal::Number(num_val))),
-                                _ => None
-                            }
-                        },
-                        TokenType::Identifiers(Identifiers::Identifier(identifier)) => Some(Expression::Identifier(Identifiers::Identifier(identifier))),
-                        _ => None
-                    };
+                    let option_value = self.parse_expr();
 
                     if option_value.is_none() {
                         throw_err!(self, "Please Provide a valid value");
                     }
 
                     let value = option_value.unwrap();
-
-                    self.advance_position();
 
                     let semicolon_token = self.current_token();
 
@@ -610,6 +596,8 @@ impl<'a> Parser<'a> {
         self.program_data.errors.push(String::from(error));
         self.skip_until_semicolon();
 
+        self.advance_position();
+
         return;
     }
 
@@ -618,13 +606,76 @@ impl<'a> Parser<'a> {
             self.advance_position();
         }
 
-        self.advance_position();
-
         return;
     }
 
     pub fn advance_position(&mut self) -> () {
         self.position += 1;
+    }
+
+    pub fn parse_array_init(&mut self) -> Option<Expression> {
+        expect_token_with_err!(TokenType::Punctuation(Punctuations::OpenSquareBracket), self);
+
+        let mut result = ArrayLiteral{items: Vec::new(), cg_items: Vec::new()};
+
+        loop {
+            let expr = self.parse_expr();
+
+            let Some(unwrapped_expr) = expr else {
+                throw_err!(self, "Expected valid expr");
+            };
+
+            result.items.push(unwrapped_expr);
+
+            match self.current_token().kind {
+                TokenType::Punctuation(Punctuations::ClosedSquareBracket) => {
+                    self.advance_position();
+
+                    if result.items.len() == 0 {
+                        return None;
+                    }
+
+                    break;
+                },
+                TokenType::Punctuation(Punctuations::Comma) => {
+                    self.advance_position();
+                    
+                    continue;
+                }
+                _ => {
+                    throw_err!(self, "");
+                }
+            }
+        }
+
+        return Some(Expression::Literal(Literal::Array(result)));
+    }
+
+    pub fn parse_expr(&mut self) -> Option<Expression> {
+        let result : Option<Expression> = match self.current_token().kind {
+            TokenType::Literal(literal) => {
+                self.advance_position();
+
+                match literal {
+                    Literal::String(string_val) => Some(Expression::Literal(Literal::String(string_val))),
+                    Literal::Number(num_val) => Some(Expression::Literal(Literal::Number(num_val))),
+                    _ => None
+                }
+            },
+            TokenType::Punctuation(Punctuations::OpenSquareBracket) => {
+                let arr_init = self.parse_array_init();
+
+                arr_init
+            },
+            TokenType::Identifiers(Identifiers::Identifier(identifier)) => {
+                self.advance_position();
+
+                Some(Expression::Identifier(Identifiers::Identifier(identifier)))
+            }
+            _ => None
+        };
+
+        return result;
     }
 
     pub fn parse_braces_body(&mut self) -> Vec<Statement> {
