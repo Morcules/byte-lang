@@ -15,6 +15,7 @@ use datatypes::parser::Parser;
 use datatypes::scope_analysis::ScopeAnalysis;
 use datatypes::code_generator::CodeGenerator;
 
+use crate::datatypes::general_functions::align_memory;
 use crate::datatypes::program_data::ProgramData;
 
 fn main() {
@@ -199,7 +200,7 @@ fn compile_file() {
     //ld -macos_version_min 11.0.0 -o output output.o -lSystem -syslibroot `xcrun -sdk macosx --show-sdk-path` -e _main -arch arm64
 
     // Create _main function.
-    write!(writer, ".global _main\n.align 4\n.text\n").expect("Error Writing File");
+    write!(writer, ".global _main\n.align 16\n.text\n").expect("Error Writing File");
 
     let mut tokenizer = Tokenizer::new(&mut program_data);
     tokenizer.tokenize_all();
@@ -219,6 +220,8 @@ fn compile_file() {
     }
 
     print!("Functions: {:?}\nStack Frames: {:?}\n", program_data.functions, program_data.stack_frames);
+
+    compute_correct_memory_in_functions(&mut program_data);
 
     let mut semantic_analysis = SemanticAnaytis::new(&mut program_data);
     semantic_analysis.process_all_functions();
@@ -253,5 +256,18 @@ fn run_file() {
     if status.success() == false {
         println!("error running program");
         return;
+    }
+}
+
+fn compute_correct_memory_in_functions(program_data : &mut ProgramData) -> () {
+    let function_names : Vec<String> = program_data.functions.keys().cloned().collect();
+
+    for function_name in function_names {
+        let first_stack_frame = program_data.functions.get(&function_name).unwrap().first_stack_frame.clone();
+
+        let total_mem_allocated = program_data.traverse_stack_frame_memory(first_stack_frame);
+        let aligned_mem = align_memory(total_mem_allocated, 16);
+    
+        program_data.functions.get_mut(&function_name).unwrap().stack_mem_allocated = aligned_mem;
     }
 }

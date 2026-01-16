@@ -96,6 +96,10 @@ pub mod asm {
         return format!("bl _{}\n", function_name);
     }
 
+    pub fn goto(label : &str) -> String {
+        return format!("b _{}\n", label);
+    }
+
     pub fn create_stack_frame(stack_memory_allocate : usize) -> String {
         if stack_memory_allocate == 0 {
             return format!("str x30, [sp, #-16]!\n");

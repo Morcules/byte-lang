@@ -17,19 +17,22 @@ void : main() {
     i8 var3 = 1;
     i64 exit_code = 30;
     i64 exit_code_clone = exit_code;
-    u64 test = 10;
+    u64 test = 5;
+    u64 test2 = 10;
     u8 something = 30;
     u8 something_clone = something;
     i64 exit_code_success = 0;
 
-    cmp(something, something_clone) {
+    cmp(test2, test) {
         .ne {
-            i64 test_integer = 5;
+            i64 test_integer = var;
 
             test_integer = 10;
+
+            bl(term, 0);
         }
         .eq {
-
+            bl(term, 1);
         }
     }
 

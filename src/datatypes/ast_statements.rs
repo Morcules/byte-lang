@@ -16,6 +16,7 @@ pub struct Function {
     pub return_type: VariableType,
     pub args: Vec<FunctionArg>,
     pub first_stack_frame: usize,
+    pub arg_stack_mem_allocated: usize,
     pub stack_mem_allocated: usize
 }
 
@@ -101,7 +102,7 @@ impl BuiltInFunctionsAst {
     pub fn parse(&self, program_data : &mut ProgramData, stack_frame : usize) -> Option<Literal> {
         return match self {
             BuiltInFunctionsAst::StackOffset(identifier) => {
-                if let Some(var) = program_data.get_stack_variable_ref(stack_frame, identifier, 0) {
+                if let Some(var) = program_data.get_stack_variable_ref(stack_frame, identifier) {
                     Some(Literal::Number(var.local_offset as i64))
                 } else if let Some(arg) = program_data.get_function_stack_arg_ref(stack_frame, identifier) {
                     Some(Literal::Number(arg.local_offset as i64))
@@ -250,13 +251,20 @@ pub enum CgStatementType {
 #[derive(Debug, PartialEq, Clone)]
 pub struct CgCompare {
     pub conditions : Vec<CmpCondition>,
-    pub expressions : [CgExpression; 2]
+    pub expressions : [CgExpression; 2],
+    pub new_exit_label : String
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum CgBuiltInFunctions {
     Assembly(String),
-    BranchLinked(CgBranchLinked)
+    BranchLinked(CgBranchLinked),
+    Branch(CgBranch)
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct CgBranch {
+    pub branch_name : String
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -309,6 +317,15 @@ impl CmpCondition {
 
     pub fn set_body(&mut self, body : Vec<Statement>) -> () {
         self.body = body;
+    }
+
+    pub fn to_string(&self) -> String {
+        let res = match self.condition_type {
+            CmpConditionType::Equal => "eq",
+            CmpConditionType::NotEqual => "ne"
+        };
+
+        return String::from(res);
     }
 
     pub fn from_token(input : &Token) -> Option<Self> {

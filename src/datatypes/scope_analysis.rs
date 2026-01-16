@@ -35,7 +35,7 @@ impl<'a> ScopeAnalysis<'a> {
 
             self.program_data.stack_frames.push(StackFrame::default(func_declaration.name.clone()));
 
-            self.program_data.functions.insert(func_declaration.name.clone(), Function{first_stack_frame: stack_frame_index, args: func_declaration.args.clone(), return_type: func_declaration.return_type.clone(), stack_mem_allocated: func_declaration.args_stack_mem_allocated});
+            self.program_data.functions.insert(func_declaration.name.clone(), Function{stack_mem_allocated: 0, first_stack_frame: stack_frame_index, args: func_declaration.args.clone(), return_type: func_declaration.return_type.clone(), arg_stack_mem_allocated: func_declaration.args_stack_mem_allocated});
 
             self.scope_stack.push(stack_frame_index);
 
@@ -167,7 +167,7 @@ impl<'a> ScopeAnalysis<'a> {
         self.scope_stack.pop();
 
         return;
-   }
+    }
 
     pub fn get_current_stack_frame(&mut self) -> &'_ mut StackFrame {
         let current_index = self.get_current_stack_frame_index();

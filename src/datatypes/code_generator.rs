@@ -1,11 +1,11 @@
 use std::{collections::HashMap, fmt::format};
 
-use crate::datatypes::{assembly_instructions::asm::*, ast_statements::{AstIdentifiers, CgBuiltInFunctions, CgExpression, CgIdentifiers, CgStatement, CgStatementType, Literal, MemoryLocationsAst, VariableType}, general_functions::align_memory, program_data::{ProgramData, StackVariableRef}, stack_frame::StackFrame};
+use crate::datatypes::{assembly_instructions::asm::*, ast_statements::{AstIdentifiers, CgBuiltInFunctions, CgExpression, CgIdentifiers, CgStatement, CgStatementType, CmpConditionType, Literal, MemoryLocationsAst, VariableType}, general_functions::align_memory, program_data::{ProgramData, StackVariableRef}, stack_frame::StackFrame};
 
 pub struct CodeGenerator<'a> {
     program_data: &'a mut ProgramData,
     stack_ptr: usize,
-    labels: HashMap<String, String>
+    labels: HashMap<String, String>,
 }
 
 impl<'a> CodeGenerator<'a> {
@@ -16,7 +16,61 @@ impl<'a> CodeGenerator<'a> {
     pub fn process_statement(&mut self, statement : &CgStatement, label: &str, stack_frame : usize) -> () {
         match statement.statement_type.clone() {
             CgStatementType::Compare(cmp) => {
-                
+                match (cmp.expressions[0].clone(), cmp.expressions[1].clone()) {
+                    (CgExpression::Literal(Literal::Number(first_num)), CgExpression::Literal(Literal::Number(second_num))) => {
+                        let mut result : usize = usize::MAX;
+
+                        for condition in cmp.conditions {
+                            let found_match = match condition.condition_type {
+                                CmpConditionType::Equal => first_num == second_num,
+                                CmpConditionType::NotEqual => first_num != second_num
+                            };
+
+                            if found_match {
+                                result = condition.stack_frame;
+                                break;
+                            }
+                        }
+
+                        if result == usize::MAX {
+                            return;
+                        }
+
+                        self.push_compiled_code_to_label(label, &jump_to_function(&result.to_string()));
+
+                        return;
+                    },
+                    _ => {}
+                }
+
+                let mut expressions = cmp.expressions.clone();
+
+                match (expressions[0].clone(), expressions[1].clone()) {
+                    (CgExpression::Literal(_), CgExpression::Identifier(CgIdentifiers::StackVariableData(_))) => {
+                        expressions.swap(0, 1);
+                    },
+                    _ => {}
+                }
+
+                let mut result = String::new();
+
+                result.push_str(&self.expr_to_temp_reg(&expressions[0], TempRegisters::T0));
+
+                if let CgExpression::Literal(Literal::Number(num)) = expressions[1] {
+                    result.push_str(&format!("cmp {}, #{}\n", temp_reg_for_type(VariableType::I64, false, TempRegisters::T0), num));
+                } else {
+                    result.push_str(&self.expr_to_temp_reg(&expressions[1], TempRegisters::T1));
+                    result.push_str(&format!("cmp {}, {}\n", temp_reg_for_type(VariableType::I64, false, TempRegisters::T0), temp_reg_for_type(VariableType::I64, false, TempRegisters::T1)));
+                }
+
+                for condition in cmp.conditions {
+                    result.push_str(&format!("b.{} _{}\n", condition.to_string(), condition.stack_frame.to_string()));
+                }
+
+                result.push_str(&goto(&cmp.new_exit_label));
+                result.push_str(&format!("_{}:\n", cmp.new_exit_label));
+
+                self.push_compiled_code_to_label(label, &result);
             },
             CgStatementType::VariableAssignment(var_init) => {
                 let compiled_code = &self.init_var(var_init.stack_offset, var_init.variable_type.clone(), var_init.assign_value);
@@ -25,11 +79,14 @@ impl<'a> CodeGenerator<'a> {
             },
             CgStatementType::BuiltInFunction(built_in_function) => {
                 match built_in_function {
+                    CgBuiltInFunctions::Branch(branch) => {
+                        self.push_compiled_code_to_label(label, &goto(&branch.branch_name));  
+                    },
                     CgBuiltInFunctions::BranchLinked(branch_linked) => {
                         let mut result = String::new();
 
                         let function_args = self.program_data.functions.get(&branch_linked.function_name).unwrap().args.clone();
-                        let function_stack_args_mem_allocated = self.program_data.functions.get(&branch_linked.function_name).unwrap().stack_mem_allocated;
+                        let function_stack_args_mem_allocated = self.program_data.functions.get(&branch_linked.function_name).unwrap().arg_stack_mem_allocated;
 
                         if function_stack_args_mem_allocated != 0 {
                             result.push_str(&allocate_stack_memory(function_stack_args_mem_allocated));
@@ -102,28 +159,37 @@ impl<'a> CodeGenerator<'a> {
                 _,
                 CgExpression::Identifier(CgIdentifiers::StackVariableData(stack_var_data))
             ) => {
-                return String::from(format!("{}{}", variable_to_reg(&temp_reg_for_type(variable_type.clone(), true), stack_var_data.offset, variable_type.clone()), store_reg_to_stack(&temp_reg_for_type(variable_type.clone(), false), target_offset, variable_type)));
+                return String::from(format!("{}{}", variable_to_reg(&temp_reg_for_type(variable_type.clone(), true, TempRegisters::T0), stack_var_data.offset, variable_type.clone()), store_reg_to_stack(&temp_reg_for_type(variable_type.clone(), false, TempRegisters::T0), target_offset, variable_type)));
             }
             _ => unreachable!()
         }
     }
-    
-    pub fn expr_to_reg(&mut self, reg : &str) -> () {
 
-    }
-
+    // Allocate stack memory and save return ptr in stack
     pub fn initialize_stack_frame(&mut self, label: &str, stack_frame : usize) -> () {
-        let mem = self.get_stack_frame_by_index(stack_frame).stack_mem_allocated.clone();
+        let mem = self.program_data.get_func_stack_memory(stack_frame);
 
         self.push_compiled_code_to_label(label, &create_stack_frame(mem));
     }
 
     pub fn return_stack_frame(&mut self, label: &str, stack_frame : usize) -> () {
-        let stack_frame_borrow = self.get_stack_frame_by_index(stack_frame);
+        let mem = self.program_data.get_func_stack_memory(stack_frame);
 
-        self.push_compiled_code_to_label(label, &destroy_stack_frame(stack_frame_borrow.stack_mem_allocated));
+        self.push_compiled_code_to_label(label, &destroy_stack_frame(mem));
 
         return;
+    }
+
+    pub fn expr_to_temp_reg(&mut self, expr : &CgExpression, temp_reg : TempRegisters) -> String {
+        match expr {
+            CgExpression::Literal(Literal::Number(num)) => {
+                return mov_num_to_reg(&temp_reg_for_type(VariableType::I64, false, temp_reg), num.clone());
+            },
+            CgExpression::Identifier(CgIdentifiers::StackVariableData(stack_var_data)) => {
+                return variable_to_reg(&temp_reg_for_type(stack_var_data.variable_type.clone(), true, temp_reg), stack_var_data.offset, stack_var_data.variable_type.clone());
+            },
+            _ => todo!()
+        }
     }
 
     pub fn push_compiled_code_to_label(&mut self, label: &str, code: &str) -> () {
@@ -131,13 +197,19 @@ impl<'a> CodeGenerator<'a> {
     }
 
     pub fn process_stack_frame(&mut self, stack_frame : usize, label: &str) -> () {
-        self.initialize_stack_frame(label, stack_frame);
+        let stack_frame_parent = self.get_stack_frame_by_index(stack_frame).parent.clone();
+
+        if stack_frame_parent == usize::MAX {
+            self.initialize_stack_frame(label, stack_frame);
+        }
 
         for statement in self.get_stack_frame_by_index(stack_frame).cg_statements.clone().iter() {
             self.process_statement(statement, label, stack_frame);
         }
 
-        self.return_stack_frame(label, stack_frame);
+        if stack_frame_parent == usize::MAX {
+            self.return_stack_frame(label, stack_frame);
+        }
 
         return;
     }
@@ -159,10 +231,14 @@ impl<'a> CodeGenerator<'a> {
     }
 
     pub fn process_all_functions(&mut self) -> () {
-        for (function_name, stack_frame) in self.program_data.functions.clone() {
+        let function_names : Vec<String> = self.program_data.functions.keys().cloned().collect();
+
+        for function_name in function_names {
             self.labels.insert(function_name.clone(), String::new());
 
-            self.process_stack_frame_and_children(stack_frame.first_stack_frame.clone(), &function_name);
+            let first_stack_frame = self.program_data.functions.get(&function_name).unwrap().first_stack_frame.clone();
+
+            self.process_stack_frame_and_children(first_stack_frame, &function_name);
         }
 
         return;

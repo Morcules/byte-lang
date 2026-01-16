@@ -1,6 +1,6 @@
 use std::{collections::HashMap, mem::zeroed, panic};
 
-use crate::datatypes::{ast_statements::{AstIdentifiers, BuiltInFunctionsAst, CgBranchLinked, CgBuiltInFunctions, CgCompare, CgExpression, CgIdentifiers, CgStatement, CgStatementType, CgVariableAssignment, Expression, FunctionArg, Literal, StackVariableData, Statement, Statements, VariableType}, general_functions::align_memory, program_data::ProgramData, stack_frame::{StackFrame, StackVariable}, token::Identifiers};
+use crate::datatypes::{ast_statements::{AstIdentifiers, BuiltInFunctionsAst, CgBranch, CgBranchLinked, CgBuiltInFunctions, CgCompare, CgExpression, CgIdentifiers, CgStatement, CgStatementType, CgVariableAssignment, Expression, FunctionArg, Literal, StackVariableData, Statement, Statements, VariableType}, program_data::ProgramData, stack_frame::{StackFrame, StackVariable}, token::Identifiers};
 
 macro_rules! throw_err {
     ($self:expr, $error:expr) => {
@@ -11,13 +11,15 @@ macro_rules! throw_err {
 }
 
 pub struct SemanticAnaytis<'a> {
-    program_data : &'a mut ProgramData
+    program_data : &'a mut ProgramData,
+    random_label_num : usize
 }
 
 impl<'a> SemanticAnaytis<'a> {
     pub fn new(program_data : &'a mut ProgramData) -> Self {
         Self {
-            program_data
+            program_data,
+            random_label_num: 0
         }
     }
 
@@ -48,7 +50,16 @@ impl<'a> SemanticAnaytis<'a> {
                     }
                 }
 
-                self.add_cg_statement_to_stack_frame(stack_frame, CgStatement{statement_type: CgStatementType::Compare(CgCompare{conditions: cmp.conditions, expressions: cg_expressions})});
+                let stack_frame_borrow = self.get_stack_frame_by_index(stack_frame);
+                let func_name = if stack_frame_borrow.parent == usize::MAX {stack_frame_borrow.function.clone()} else {stack_frame.to_string()};
+                let label_num = self.get_random_label_num();
+                let branch_name = format!("{}_{}", func_name, label_num);
+
+                for condition in &cmp.conditions {
+                    self.add_cg_statement_to_stack_frame(condition.stack_frame, CgStatement{statement_type: CgStatementType::BuiltInFunction(CgBuiltInFunctions::Branch(CgBranch{branch_name: branch_name.clone()}))});
+                }
+
+                self.add_cg_statement_to_stack_frame(stack_frame, CgStatement{statement_type: CgStatementType::Compare(CgCompare{conditions: cmp.conditions, expressions: cg_expressions, new_exit_label: branch_name})});
             },
             Statements::Assignment(assignment) => {
                 self.initialize_identifier(&assignment.identifier, &assignment.expression, stack_frame);
@@ -76,7 +87,8 @@ impl<'a> SemanticAnaytis<'a> {
                                 let valid : bool = match (cg_expression_unwrapped.clone(), bl_function.args.get(i).unwrap().arg_var_type.clone()) {
                                     (
                                         CgExpression::Literal(Literal::Number(_)),
-                                        VariableType::I8 | VariableType::I16 | VariableType::I32
+                                        VariableType::I8 | VariableType::I16 | VariableType::I32 | VariableType::I64 |
+                                        VariableType::U8 | VariableType::U16 | VariableType::U32 | VariableType::U64
                                     ) => true,
                                     (
                                         CgExpression::Identifier(CgIdentifiers::StackVariableData(stack_var_data)),
@@ -125,7 +137,7 @@ impl<'a> SemanticAnaytis<'a> {
         match expression {
             Expression::Literal(literal) => return Some(CgExpression::Literal(literal)),
             Expression::Identifier(Identifiers::Identifier(identifier)) => {
-                if let Some(stack_var_ref) = self.program_data.get_stack_variable_ref(stack_frame, &identifier, 0) {
+                if let Some(stack_var_ref) = self.program_data.get_stack_variable_ref(stack_frame, &identifier) {
                     return Some(CgExpression::Identifier(CgIdentifiers::StackVariableData(StackVariableData{offset: stack_var_ref.local_offset, variable_type: stack_var_ref.var.variable_type})));
                 } else if let Some(function_arg_ref) = self.program_data.get_function_stack_arg_ref(stack_frame, &identifier) {
                     return Some(CgExpression::Identifier(CgIdentifiers::StackVariableData(StackVariableData{offset: function_arg_ref.local_offset, variable_type: function_arg_ref.var.arg_var_type})));
@@ -144,10 +156,6 @@ impl<'a> SemanticAnaytis<'a> {
     }
 
     pub fn process_stack_frame(&mut self, stack_frame : usize) -> () {
-        let stack_mem = self.get_stack_frame_by_index_mut(stack_frame).stack_mem_allocated.clone();
-
-        self.get_stack_frame_by_index_mut(stack_frame).stack_mem_allocated = align_memory(stack_mem, 16);
-
         for statement in self.get_stack_frame_by_index(stack_frame).statements.clone().iter() {
             self.process_statement(statement, stack_frame);
         }
@@ -213,7 +221,7 @@ impl<'a> SemanticAnaytis<'a> {
     }
 
     pub fn initialize_identifier(&mut self, identifier : &str, expr : &Expression, stack_frame : usize) -> () {
-        if let Some(stack_var_ref) = self.program_data.get_stack_variable_ref(stack_frame, identifier, 0) {
+        if let Some(stack_var_ref) = self.program_data.get_stack_variable_ref(stack_frame, identifier) {
             let init_valid = self.match_var_type_with_expr(&stack_var_ref.var.variable_type, expr, stack_frame);
 
             if !init_valid {
@@ -244,6 +252,12 @@ impl<'a> SemanticAnaytis<'a> {
         } else {
             throw_err!(self, "Expected assignment of valid identifier");
         }
+    }
+    
+    pub fn get_random_label_num(&mut self) -> usize {
+        self.random_label_num += 1;
+
+        return self.random_label_num;
     }
 
     pub fn throw_err(&mut self, err : &str) -> () {
