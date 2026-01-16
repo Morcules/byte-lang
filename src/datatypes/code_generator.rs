@@ -160,7 +160,27 @@ impl<'a> CodeGenerator<'a> {
                 CgExpression::Identifier(CgIdentifiers::StackVariableData(stack_var_data))
             ) => {
                 return String::from(format!("{}{}", variable_to_reg(&temp_reg_for_type(variable_type.clone(), true, TempRegisters::T0), stack_var_data.offset, variable_type.clone()), store_reg_to_stack(&temp_reg_for_type(variable_type.clone(), false, TempRegisters::T0), target_offset, variable_type)));
-            }
+            },
+            (
+                VariableType::Array(arr),
+                CgExpression::Literal(Literal::Array(arr_expr))
+            ) => {
+                let mut res = String::new();
+
+                let mut i = 0;
+
+                let item_size = arr.variable_type.get_variable_size();
+
+                for item in arr_expr.cg_items {
+                    let init_code = self.init_var((i * item_size) + target_offset, *arr.variable_type.clone(), item);
+
+                    res.push_str(&init_code);
+
+                    i += 1;
+                }
+
+                return res;
+            },
             _ => unreachable!()
         }
     }

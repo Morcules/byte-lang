@@ -188,16 +188,24 @@ pub enum Expression {
 }
 
 #[derive(Debug, PartialEq, Clone)]
+pub struct ArrayLiteral {
+    pub items : Vec<Expression>,
+    pub cg_items : Vec<CgExpression>
+}
+
+#[derive(Debug, PartialEq, Clone)]
 pub enum Literal {
     String(String),
-    Number(i64)
+    Number(i64),
+    Array(ArrayLiteral)
 }
 
 impl Literal {
     pub fn to_string(&self) -> String {
         let res : String = match self {
             Literal::String(str) => str.clone(),
-            Literal::Number(num) => num.to_string()
+            Literal::Number(num) => num.to_string(),
+            _ => unreachable!()
         };
 
         return res;
@@ -230,6 +238,13 @@ pub enum VariableType {
     Array(ArrayType)
 }
 
+#[macro_export]
+macro_rules! num_types {
+    () => {
+        VariableType::I8 | VariableType::I16 | VariableType::I32 | VariableType::I64 | VariableType::U8 | VariableType::U16 | VariableType::U32 | VariableType::U64
+    };
+}
+
 impl VariableType {
     #[inline]
     pub fn get_variable_size(&self) -> usize {
@@ -246,7 +261,6 @@ impl VariableType {
             VariableType::Void => 0
         }
     }
-
 }
 
 // Code gen specific Structs

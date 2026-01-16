@@ -25,8 +25,6 @@ void : main() {
     i64 exit_code_success = 0;
     array[u8, 12] string;
     //array[u8, 12] string = "hello world\0";//
-    array[u8, 2] arr;
-    //array[u8, 2] arr = [1, 2];//
 
     cmp(test2, test) {
         .ne {
@@ -37,6 +35,8 @@ void : main() {
             bl(term, 0);
         }
         .eq {
+            array[u64, 4] arr = [1, 2, 3, 4];
+
             bl(term, 1);
         }
     }

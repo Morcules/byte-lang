@@ -1,25 +1,61 @@
 .global _main
 .align 16
 .text
-_test:
-str x30, [sp, #-16]!
-sub sp, sp, #16
-mov x10, #15
-str x10, [sp, #8]
-ldr x10, [sp, #8]
-str x10, [sp, #8]
-add sp, sp, #16
-ldr x30, [sp], #16
-ret
-
 _3:
-ldr x10, [sp, #72]
-str x10, [sp, #4]
+ldr x10, [sp, #104]
+str x10, [sp, #38]
 mov x10, #10
-str x10, [sp, #4]
+str x10, [sp, #38]
 mov x0, #0
 bl _term
 b _main_1
+
+_main:
+str x30, [sp, #-16]!
+sub sp, sp, #112
+mov x10, #5
+str x10, [sp, #104]
+mov w10, #2
+strh w10, [sp, #102]
+mov w10, #1
+strb w10, [sp, #101]
+mov w10, #97
+strb w10, [sp, #100]
+mov x10, #30
+str x10, [sp, #92]
+ldr x10, [sp, #92]
+str x10, [sp, #84]
+mov x10, #5
+str x10, [sp, #76]
+mov x10, #10
+str x10, [sp, #68]
+mov w10, #30
+strb w10, [sp, #67]
+ldrb w10, [sp, #67]
+strb w10, [sp, #66]
+mov x10, #0
+str x10, [sp, #58]
+ldr x10, [sp, #68]
+ldr x11, [sp, #76]
+cmp x10, x11
+b.ne _3
+b.eq _4
+b _main_1
+_main_1:
+mov x10, #1
+str x10, [sp, #58]
+sub sp, sp, #16
+ldr x10, [sp, #120]
+str x10, [sp, #8]
+ldr x10, [sp, #100]
+str x10, [sp, #0]
+bl _test
+add sp, sp, #16
+ldr x0, [sp, #58]
+bl _term
+add sp, sp, #112
+ldr x30, [sp], #16
+ret
 
 _term:
 str x30, [sp, #-16]!
@@ -33,55 +69,27 @@ add sp, sp, #16
 ldr x30, [sp], #16
 ret
 
-_main:
-str x30, [sp, #-16]!
-sub sp, sp, #80
-mov x10, #5
-str x10, [sp, #72]
-mov w10, #2
-strh w10, [sp, #70]
-mov w10, #1
-strb w10, [sp, #69]
-mov w10, #97
-strb w10, [sp, #68]
-mov x10, #30
-str x10, [sp, #60]
-ldr x10, [sp, #60]
-str x10, [sp, #52]
-mov x10, #5
-str x10, [sp, #44]
-mov x10, #10
-str x10, [sp, #36]
-mov w10, #30
-strb w10, [sp, #35]
-ldrb w10, [sp, #35]
-strb w10, [sp, #34]
-mov x10, #0
-str x10, [sp, #26]
-ldr x10, [sp, #36]
-ldr x11, [sp, #44]
-cmp x10, x11
-b.ne _3
-b.eq _4
-b _main_1
-_main_1:
-mov x10, #1
-str x10, [sp, #26]
-sub sp, sp, #16
-ldr x10, [sp, #88]
-str x10, [sp, #8]
-ldr x10, [sp, #68]
-str x10, [sp, #0]
-bl _test
-add sp, sp, #16
-ldr x0, [sp, #26]
-bl _term
-add sp, sp, #80
-ldr x30, [sp], #16
-ret
-
 _4:
+mov x10, #1
+str x10, [sp, #14]
+mov x10, #2
+str x10, [sp, #22]
+mov x10, #3
+str x10, [sp, #30]
+mov x10, #4
+str x10, [sp, #38]
 mov x0, #1
 bl _term
 b _main_1
+
+_test:
+str x30, [sp, #-16]!
+sub sp, sp, #16
+mov x10, #15
+str x10, [sp, #40]
+ldr x10, [sp, #40]
+str x10, [sp, #8]
+add sp, sp, #16
+ldr x30, [sp], #16
+ret
 
