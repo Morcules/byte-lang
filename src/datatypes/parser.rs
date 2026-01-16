@@ -1,6 +1,6 @@
 use std::panic;
 
-use crate::datatypes::ast_statements::{Assignment, BranchLinkedAst, BuiltInFunctionsAst, CmpCondition, Compare, Expression, Format, Function, FunctionArg, FunctionDeclaration, Literal, MemoryLocationsAst, Statement, Statements, VariableDeclaration, VariableType};
+use crate::datatypes::ast_statements::{ArrayType, Assignment, BranchLinkedAst, BuiltInFunctionsAst, CmpCondition, Compare, Expression, Format, Function, FunctionArg, FunctionDeclaration, Literal, MemoryLocationsAst, Statement, Statements, VariableDeclaration, VariableType};
 use crate::datatypes::general_functions::align_memory;
 use crate::datatypes::program_data::ProgramData;
 use crate::datatypes::token::{BuiltInFunctions, Identifiers, Keywords, MemoryLocations, Operators, Punctuations, Token, TokenType};
@@ -354,6 +354,34 @@ impl<'a> Parser<'a> {
             TokenType::Keyword(keyword) => {
                 match keyword {
                     Keywords::VariableType(var_type) => {
+                        if let VariableType::Array(_) = var_type {
+                            self.advance_position();
+
+                            expect_token_with_err!(TokenType::Punctuation(Punctuations::OpenSquareBracket), self);
+
+                            let TokenType::Keyword(Keywords::VariableType(arr_var_type)) = self.current_token().kind else {
+                                throw_err!(self, "Exepcted var type");
+                            };
+
+                            self.advance_position();
+
+                            expect_token_with_err!(TokenType::Punctuation(Punctuations::Comma), self);
+
+                            let TokenType::Literal(Literal::Number(item_count)) = self.current_token().kind else {
+                                throw_err!(self, "");
+                            };
+
+                            self.advance_position();
+
+                            expect_token_with_err!(TokenType::Punctuation(Punctuations::ClosedSquareBracket), self);
+
+                            let TokenType::Identifiers(Identifiers::Identifier(var_name)) = self.current_token().kind else {
+                                throw_err!(self, "");
+                            };
+
+                            return self.parse_variable_declaration(&token, VariableType::Array(ArrayType{item_count : item_count as usize, variable_type: Box::new(arr_var_type)}), &var_name)
+                        }
+
                         self.advance_position();
 
                         match self.current_token().kind {

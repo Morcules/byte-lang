@@ -74,27 +74,17 @@ impl ProgramData {
         )
     }
 
+    // Get refrence to stack arg
     pub fn get_function_stack_arg_ref(&self, stack_frame : usize, identifier : &str) -> Option<FunctionStackArgRef> {
         let function_name = self.get_stack_frame_by_index(stack_frame).function.clone();
 
-        let func_mem_allocated = self.functions.get(&function_name).unwrap().arg_stack_mem_allocated.clone();
+        let func_arg_stack_mem_allocated = self.functions.get(&function_name).unwrap().arg_stack_mem_allocated.clone();
+        let func_stack_mem_allocated = self.functions.get(&function_name).unwrap().stack_mem_allocated.clone();
         let func_arg = self.functions.get(&function_name).unwrap().args.iter().find(|arg| arg.arg_name == identifier);
-
-        let mut current_stack_frame = stack_frame;
-
-        loop {
-            let current_stack_frame_borrow = self.get_stack_frame_by_index(current_stack_frame);
-
-            if current_stack_frame_borrow.parent == usize::MAX {
-                break;
-            }
-
-            current_stack_frame = current_stack_frame_borrow.parent;
-        }
 
         if let Some(func_arg_unwrapped) = func_arg {
             if let MemoryLocationsAst::Stack(stack_offset) = func_arg_unwrapped.memory_location {
-                return Some(FunctionStackArgRef{local_offset: func_mem_allocated - stack_offset - func_arg_unwrapped.arg_var_type.get_variable_size(), var: func_arg_unwrapped.clone()});
+                return Some(FunctionStackArgRef{local_offset: (func_arg_stack_mem_allocated + func_stack_mem_allocated + 16) - stack_offset - func_arg_unwrapped.arg_var_type.get_variable_size(), var: func_arg_unwrapped.clone()});
             }
 
             return None;
