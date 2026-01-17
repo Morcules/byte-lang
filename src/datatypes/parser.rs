@@ -1,9 +1,4 @@
-use std::any::Any;
-use std::error::{self, Error};
-
-use reqwest::header::InvalidHeaderName;
-
-use crate::datatypes::ast_statements::{ArrayLiteral, ArrayType, Assignment, BranchLinkedAst, BuiltInFunctionsAst, CmpCondition, Compare, Expression, Format, Function, FunctionArg, FunctionDeclaration, Literal, MemoryLocationsAst, Statement, Statements, VariableDeclaration, VariableType};
+use crate::datatypes::ast_statements::{ArrayLiteral, ArrayType, Assignment, BranchLinkedAst, BuiltInFunctionsAst, CmpCondition, Compare, Expression, Format, FunctionArg, FunctionDeclaration, Literal, MemoryLocationsAst, Statement, Statements, VariableDeclaration, VariableType};
 use crate::datatypes::errors::ErrorKind;
 use crate::datatypes::general_functions::align_memory;
 use crate::datatypes::program_data::ProgramData;
@@ -91,7 +86,7 @@ impl<'a> Parser<'a> {
                             args.push(Expression::Literal(literal));
                             self.advance_position();
                         },
-                        TokenType::BuiltInFunction(func) => {
+                        TokenType::BuiltInFunction(_) => {
                             let next_parsed = self.parse_next();
 
                             if let Some(parsed_unwrapped) = next_parsed {

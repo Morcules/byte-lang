@@ -19,17 +19,6 @@ pub enum Keywords {
     VariableTypeEmpty
 }
 
-impl Keywords {
-    pub fn type_string(&self) -> String {
-        let str : &str = match self {
-            Keywords::VariableType(_) => "VariableType keyword",
-            Keywords::VariableTypeEmpty => "VariableType keyword"
-        };
-
-        return String::from(str);
-    }
-}
-
 #[derive(Debug, PartialEq, Clone)]
 pub enum Identifiers {
     Identifier(String),
@@ -38,32 +27,10 @@ pub enum Identifiers {
     IdentifierEmpty
 }
 
-impl Identifiers {
-    pub fn type_string(&self) -> String {
-        let str : &str = match self {
-            Identifiers::Identifier(_) => "Identifier",
-            Identifiers::IdentifierEmpty => "Identifier"
-        };
-
-        return String::from(str);
-    }
-}
-
 #[derive(Debug, PartialEq, Clone)]
 pub enum MemoryLocations {
     Stack,
     Register
-}
-
-impl MemoryLocations {
-    pub fn type_string(&self) -> String {
-        let str : &str = match self {
-            MemoryLocations::Stack => "Stack memory location",
-            MemoryLocations::Register => "Register memory location",
-        };
-
-        return String::from(str);
-    }
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -83,6 +50,75 @@ pub enum TokenType {
     BuiltInFunctionEmpty,
     IdentifierEmpty,
     MemoryLocationEmpty
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum BuiltInFunctions {
+    Loop,
+    Compare,
+    Assembly,
+    Format,
+    StackOffset,   
+    Branch,
+    BranchLinked,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum Punctuations {
+    Colon,
+    OpenParenthesis,
+    ClosedParenthesis,
+    OpenBraces,
+    ClosedBraces,
+    OpenSquareBracket,
+    ClosedSquareBracket,
+    Dot,
+    Comma,
+    Semicolon
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum Operators {
+    Assignment
+}
+
+// ***************************** //
+// *TYPE_STRING_IMPLEMENTATIONS* //
+// ***************************** //
+
+impl BuiltInFunctions {
+    pub fn type_string(&self) -> String {
+        let str : &str = match self {
+            BuiltInFunctions::Loop => "Loop Built in function",
+            BuiltInFunctions::Compare => "Compare Built in function",
+            BuiltInFunctions::Assembly => "Assembly Built in function",
+            BuiltInFunctions::Format => "Format Built in function",
+            BuiltInFunctions::StackOffset => "StackOffset Built in function",   
+            BuiltInFunctions::Branch => "Branch Built in function",
+            BuiltInFunctions::BranchLinked => "BranchLinked Built in function",
+        };
+
+        return String::from(str);
+    }
+}
+
+impl Punctuations {
+    pub fn type_string(&self) -> String {
+        let str : &str = match self {
+            Punctuations::Colon => "Colon punctuation",
+            Punctuations::OpenParenthesis => "OpenParenthesis punctuation",
+            Punctuations::ClosedParenthesis => "ClosedParenthesis punctuation",
+            Punctuations::OpenBraces => "OpenBraces punctuation",
+            Punctuations::ClosedBraces => "ClosedBraces punctuation",
+            Punctuations::OpenSquareBracket => "OpenSquareBracket punctuation",
+            Punctuations::ClosedSquareBracket => "ClosedSquareBracket punctuation",
+            Punctuations::Dot => "Dot punctuation",
+            Punctuations::Comma => "Comma punctuation",
+            Punctuations::Semicolon => "Semicolon punctuation"
+        };
+
+        return String::from(str);
+    }
 }
 
 impl TokenType {
@@ -110,75 +146,43 @@ impl TokenType {
     }
 }
 
-#[derive(Debug, PartialEq, Clone)]
-pub enum BuiltInFunctions {
-    Loop,
-    Compare,
-    Assembly,
-    Format,
-    StackOffset,   
-    Branch,
-    BranchLinked,
-}
-
-impl BuiltInFunctions {
+impl MemoryLocations {
     pub fn type_string(&self) -> String {
         let str : &str = match self {
-            BuiltInFunctions::Loop => "Loop Built in function",
-            BuiltInFunctions::Compare => "Compare Built in function",
-            BuiltInFunctions::Assembly => "Assembly Built in function",
-            BuiltInFunctions::Format => "Format Built in function",
-            BuiltInFunctions::StackOffset => "StackOffset Built in function",   
-            BuiltInFunctions::Branch => "Branch Built in function",
-            BuiltInFunctions::BranchLinked => "BranchLinked Built in function",
+            MemoryLocations::Stack => "Stack memory location",
+            MemoryLocations::Register => "Register memory location",
         };
 
         return String::from(str);
     }
 }
 
-#[derive(Debug, PartialEq, Clone)]
-pub enum Punctuations {
-    Colon,
-    OpenParenthesis,
-    ClosedParenthesis,
-    OpenBraces,
-    ClosedBraces,
-    OpenSquareBracket,
-    ClosedSquareBracket,
-    Dot,
-    Comma,
-    Semicolon
-}
-
-impl Punctuations {
+impl Identifiers {
     pub fn type_string(&self) -> String {
         let str : &str = match self {
-            Punctuations::Colon => "Colon punctuation",
-            Punctuations::OpenParenthesis => "OpenParenthesis punctuation",
-            Punctuations::ClosedParenthesis => "ClosedParenthesis punctuation",
-            Punctuations::OpenBraces => "OpenBraces punctuation",
-            Punctuations::ClosedBraces => "ClosedBraces punctuation",
-            Punctuations::OpenSquareBracket => "OpenSquareBracket punctuation",
-            Punctuations::ClosedSquareBracket => "ClosedSquareBracket punctuation",
-            Punctuations::Dot => "Dot punctuation",
-            Punctuations::Comma => "Comma punctuation",
-            Punctuations::Semicolon => "Semicolon punctuation"
+            Identifiers::Identifier(_) => "Identifier",
+            Identifiers::IdentifierEmpty => "Identifier"
         };
 
         return String::from(str);
     }
-}
-
-#[derive(Debug, PartialEq, Clone)]
-pub enum Operators {
-    Assignment
 }
 
 impl Operators {
     pub fn type_string(&self) -> String {
         let str : &str = match self {
             Operators::Assignment => "Assignment operator",
+        };
+
+        return String::from(str);
+    }
+}
+
+impl Keywords {
+    pub fn type_string(&self) -> String {
+        let str : &str = match self {
+            Keywords::VariableType(_) => "VariableType keyword",
+            Keywords::VariableTypeEmpty => "VariableType keyword"
         };
 
         return String::from(str);
