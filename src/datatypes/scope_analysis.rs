@@ -1,6 +1,4 @@
-use std::{collections::HashMap, panic};
-
-use crate::datatypes::{ast_statements::{BuiltInFunctionsAst, CgBranchLinked, CgBuiltInFunctions, CgStatement, CgStatementType, Expression, Function, Literal, Statement, Statements, VariableDeclaration, VariableType}, program_data::ProgramData, scope::{Scope, StackVariable}};
+use crate::datatypes::{ast_statements::{BuiltInFunctionsAst, Expression, Function, Statement, Statements, VariableDeclaration}, program_data::ProgramData, scope::{Scope, StackVariable}};
 
 macro_rules! throw_err {
     ($self:expr, $error:expr) => {

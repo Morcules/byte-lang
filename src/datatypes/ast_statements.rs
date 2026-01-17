@@ -79,29 +79,6 @@ pub enum Statements {
     ExpressionEmpty,
 }
 
-impl Statements {
-    pub fn type_string(&self) -> String {
-        let str : &str = match self {
-            Statements::EOF => "EOF",
-            Statements::Assignment(_) => "Variable assignment",
-            Statements::VariableDeclaration(_) => "Variable declaration",
-            Statements::FunctionDeclaration(_) => "Function declaration",
-            Statements::Compare(_) => "Compare function",
-            Statements::StackFramePop => "Stack frame pop",
-            Statements::Expression(expression) => &expression.type_string(),
-
-            Statements::AssignmentEmpty => "Variable assignment",
-            Statements::VariableDeclarationEmpty => "Variable declaration",
-            Statements::FunctionDeclarationEmpty => "Function declaration",
-            Statements::CompareEmpty => "Compare function",
-            Statements::ExpressionEmpty => "Expression",
-
-        };
-
-        return String::from(str);
-    }
-}
-
 #[derive(Debug, PartialEq, Clone)]
 pub enum BuiltInFunctionsAst {
     Assembly(Box<Expression>),
@@ -135,22 +112,6 @@ pub struct BranchLinkedAst {
 }
 
 impl BuiltInFunctionsAst {
-    pub fn type_string(&self) -> String {
-        let str : &str = match self {
-            BuiltInFunctionsAst::StackOffset(_) => "Built in function Stack Offset",
-            BuiltInFunctionsAst::Format(_) => "Built in function Format",
-            BuiltInFunctionsAst::Assembly(_) => "Built in function Assembly",
-            BuiltInFunctionsAst::BranchLinked(_) => "Built in function Branch Linked",
-            BuiltInFunctionsAst::StackOffsetEmpty => "Built in function Stack Offset",
-            BuiltInFunctionsAst::FormatEmpty => "Built in function Format",
-            BuiltInFunctionsAst::AssemblyEmpty => "Built in function Assembly",
-            BuiltInFunctionsAst::BranchLinkedEmpty => "Built in function Branch Linked"
-
-        };
-
-        return String::from(str);
-    }
-
     pub fn parse(&self, program_data : &mut ProgramData, scope : usize) -> Option<Literal> {
         return match self {
             BuiltInFunctionsAst::StackOffset(identifier) => {
@@ -239,18 +200,6 @@ pub enum Expression {
     BuiltInFunction(BuiltInFunctionsAst)
 }
 
-impl Expression {
-    pub fn type_string(&self) -> String {
-        let str : &str = match self {
-            Expression::Literal(literal) => &literal.type_string(),
-            Expression::Identifier(identifier) => &identifier.type_string(),
-            Expression::BuiltInFunction(built_in_function) => &built_in_function.type_string()
-        };
-
-        return String::from(str);
-    }
-}
-
 #[derive(Debug, PartialEq, Clone)]
 pub struct ArrayLiteral {
     pub items : Vec<Expression>,
@@ -267,21 +216,6 @@ pub enum Literal {
     StringEmpty,
     NumberEmpty,
     ArrayEmpty
-}
-
-impl Literal {
-    pub fn type_string(&self) -> String {
-        let str : &str = match self {
-            Literal::String(_) => "String literal",
-            Literal::Number(_) => "Number literal",
-            Literal::Array(_) => "Array literal",
-            Literal::StringEmpty => "String literal",
-            Literal::NumberEmpty => "Number literal",
-            Literal::ArrayEmpty => "Array literal"
-        };
-
-        return String::from(str);
-    }
 }
 
 impl Literal {
@@ -458,5 +392,77 @@ impl CmpCondition {
         }
 
         return None;
+    }
+}
+
+// ***************************** //
+// *TYPE_STRING_IMPLEMENTATIONS* //
+// ***************************** //
+
+impl Statements {
+    pub fn type_string(&self) -> String {
+        let str : &str = match self {
+            Statements::EOF => "EOF",
+            Statements::Assignment(_) => "Variable assignment",
+            Statements::VariableDeclaration(_) => "Variable declaration",
+            Statements::FunctionDeclaration(_) => "Function declaration",
+            Statements::Compare(_) => "Compare function",
+            Statements::StackFramePop => "Stack frame pop",
+            Statements::Expression(expression) => &expression.type_string(),
+
+            Statements::AssignmentEmpty => "Variable assignment",
+            Statements::VariableDeclarationEmpty => "Variable declaration",
+            Statements::FunctionDeclarationEmpty => "Function declaration",
+            Statements::CompareEmpty => "Compare function",
+            Statements::ExpressionEmpty => "Expression",
+
+        };
+
+        return String::from(str);
+    }
+}
+
+impl BuiltInFunctionsAst {
+    pub fn type_string(&self) -> String {
+        let str : &str = match self {
+            BuiltInFunctionsAst::StackOffset(_) => "Built in function Stack Offset",
+            BuiltInFunctionsAst::Format(_) => "Built in function Format",
+            BuiltInFunctionsAst::Assembly(_) => "Built in function Assembly",
+            BuiltInFunctionsAst::BranchLinked(_) => "Built in function Branch Linked",
+            BuiltInFunctionsAst::StackOffsetEmpty => "Built in function Stack Offset",
+            BuiltInFunctionsAst::FormatEmpty => "Built in function Format",
+            BuiltInFunctionsAst::AssemblyEmpty => "Built in function Assembly",
+            BuiltInFunctionsAst::BranchLinkedEmpty => "Built in function Branch Linked"
+
+        };
+
+        return String::from(str);
+    }
+}
+
+impl Expression {
+    pub fn type_string(&self) -> String {
+        let str : &str = match self {
+            Expression::Literal(literal) => &literal.type_string(),
+            Expression::Identifier(identifier) => &identifier.type_string(),
+            Expression::BuiltInFunction(built_in_function) => &built_in_function.type_string()
+        };
+
+        return String::from(str);
+    }
+}
+
+impl Literal {
+    pub fn type_string(&self) -> String {
+        let str : &str = match self {
+            Literal::String(_) => "String literal",
+            Literal::Number(_) => "Number literal",
+            Literal::Array(_) => "Array literal",
+            Literal::StringEmpty => "String literal",
+            Literal::NumberEmpty => "Number literal",
+            Literal::ArrayEmpty => "Array literal"
+        };
+
+        return String::from(str);
     }
 }
