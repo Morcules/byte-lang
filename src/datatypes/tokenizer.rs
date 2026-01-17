@@ -135,7 +135,7 @@ impl<'a> Tokenizer<'a> {
                 self.col = 1;
             },
             "stack_offset" => {
-                return Some(Token{kind: TokenType::BuiltInFunctions(BuiltInFunctions::StackOffset), ..token_default});
+                return Some(Token{kind: TokenType::BuiltInFunction(BuiltInFunctions::StackOffset), ..token_default});
             }
             ";" => {
                 return Some(Token{kind: TokenType::Punctuation(Punctuations::Semicolon), ..token_default});
@@ -171,10 +171,10 @@ impl<'a> Tokenizer<'a> {
                 return Some(Token{kind: TokenType::Punctuation(Punctuations::Dot), ..token_default});
             },
             "cmp" => {
-                return Some(Token{kind: TokenType::BuiltInFunctions(BuiltInFunctions::Compare), ..token_default});
+                return Some(Token{kind: TokenType::BuiltInFunction(BuiltInFunctions::Compare), ..token_default});
             },
             "bl" => {
-                return Some(Token{kind: TokenType::BuiltInFunctions(BuiltInFunctions::BranchLinked), ..token_default});
+                return Some(Token{kind: TokenType::BuiltInFunction(BuiltInFunctions::BranchLinked), ..token_default});
             },
             "stack"=> {
                 return Some(Token{kind: TokenType::MemoryLocation(MemoryLocations::Stack), ..token_default});
@@ -183,7 +183,7 @@ impl<'a> Tokenizer<'a> {
                 return Some(Token{kind: TokenType::MemoryLocation(MemoryLocations::Register), ..token_default});
             },
             "asm" => {
-                return Some(Token{kind: TokenType::BuiltInFunctions(BuiltInFunctions::Assembly), ..token_default});
+                return Some(Token{kind: TokenType::BuiltInFunction(BuiltInFunctions::Assembly), ..token_default});
             }
             "i64" | "i32" | "i16" | "i8" | "u64" | "u32" | "u16" | "u8" | "void" | "array" => {
                 return Some(Token{kind: TokenType::Keyword(Keywords::VariableType(
@@ -203,13 +203,13 @@ impl<'a> Tokenizer<'a> {
                 )), ..token_default});
             },
             "format" => {
-                return Some(Token{kind: TokenType::BuiltInFunctions(BuiltInFunctions::Format), ..token_default});
+                return Some(Token{kind: TokenType::BuiltInFunction(BuiltInFunctions::Format), ..token_default});
             }
             "compare" => {
-                return Some(Token{kind: TokenType::BuiltInFunctions(BuiltInFunctions::Compare), ..token_default});
+                return Some(Token{kind: TokenType::BuiltInFunction(BuiltInFunctions::Compare), ..token_default});
             },
             "loop" => {
-                return Some(Token{kind: TokenType::BuiltInFunctions(BuiltInFunctions::Loop), ..token_default});
+                return Some(Token{kind: TokenType::BuiltInFunction(BuiltInFunctions::Loop), ..token_default});
             },
             _ => {
                 match res.parse::<i64>() {
@@ -217,7 +217,7 @@ impl<'a> Tokenizer<'a> {
                         return Some(Token{kind: TokenType::Literal(Literal::Number(num)), ..token_default});
                     },
                     Err(_) => {
-                        return Some(Token{kind: TokenType::Identifiers(Identifiers::Identifier(res)), ..token_default});
+                        return Some(Token{kind: TokenType::Identifier(Identifiers::Identifier(res)), ..token_default});
 
                     }
                 }
@@ -227,6 +227,7 @@ impl<'a> Tokenizer<'a> {
         return None;
     }
 
+    // Increment position by X amount
     pub fn advance(&mut self, num : usize) {
         let mut new_position : usize = self.position;
         let mut new_col : usize = self.col;

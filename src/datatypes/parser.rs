@@ -1,9 +1,14 @@
-use std::panic;
+use std::any::Any;
+use std::error::{self, Error};
+
+use reqwest::header::InvalidHeaderName;
 
 use crate::datatypes::ast_statements::{ArrayLiteral, ArrayType, Assignment, BranchLinkedAst, BuiltInFunctionsAst, CmpCondition, Compare, Expression, Format, Function, FunctionArg, FunctionDeclaration, Literal, MemoryLocationsAst, Statement, Statements, VariableDeclaration, VariableType};
+use crate::datatypes::errors::ErrorKind;
 use crate::datatypes::general_functions::align_memory;
 use crate::datatypes::program_data::ProgramData;
 use crate::datatypes::token::{BuiltInFunctions, Identifiers, Keywords, MemoryLocations, Operators, Punctuations, Token, TokenType};
+use crate::err_args;
 
 macro_rules! expect_token_with_err {
     ($type_expecting:expr, $self:expr) => {
@@ -14,36 +19,41 @@ macro_rules! expect_token_with_err {
     };
 }
 
-macro_rules! throw_err {
+macro_rules! error_and_skip {
+    ($self:expr, $error:expr, $($arg:expr),+ $(,)?) => {
+        $self.handle_error(&$error.format_message(&[$($arg),+]));
+        return None;
+    };
+
     ($self:expr, $error:expr) => {
-        $self.handle_error($error);
+        $self.handle_error($error.template());
 
         return None;
     };
+
 }
 
 pub struct Parser<'a> {
     program_data: &'a mut ProgramData,
-    position: usize,
-    // True = pop stack frame on nearest '};
-    // False = don't pop stack frame
-    scope_behaviour: Vec<bool>
+    position: usize
 }
 
 impl<'a> Parser<'a> {
     pub fn new(program_data: &'a mut ProgramData) -> Self {
-        return Self{program_data, position: 0, scope_behaviour: Vec::new()};
+        return Self{program_data, position: 0};
     }
 
     pub fn parse_all(&mut self) -> () {
         loop {
             match self.parse_next() {
                 Some(statement) => {
-                    self.program_data.statements.push(statement.clone());
+                    let eof = statement.statement_type == Statements::EOF;
 
                     print!("{:?}", statement);
 
-                    if statement.statement_type == Statements::EOF {
+                    self.program_data.statements.push(statement);
+
+                    if eof {
                         break;
                     }
                 },
@@ -59,8 +69,10 @@ impl<'a> Parser<'a> {
 
         expect_token_with_err!(TokenType::Punctuation(Punctuations::OpenParenthesis), self);
 
-        let TokenType::Literal(Literal::String(string_literal)) = self.current_token().kind else {
-            throw_err!(self, "Expected compile time string");
+        let format_string_tkn = self.current_token();
+
+        let TokenType::Literal(Literal::String(string_literal)) = format_string_tkn.kind else {
+            error_and_skip!(self, ErrorKind::InvalidToken, Literal::StringEmpty.type_string(), format_string_tkn.kind.type_string());
         };
 
         self.advance_position();
@@ -71,26 +83,31 @@ impl<'a> Parser<'a> {
             match self.current_token().kind {
                 TokenType::Punctuation(Punctuations::Comma) => {
                     self.advance_position();
-                    match self.current_token().kind {
+
+                    let arg_token = self.current_token();
+
+                    match arg_token.kind {
                         TokenType::Literal(literal) => {
                             args.push(Expression::Literal(literal));
                             self.advance_position();
                         },
-                        TokenType::BuiltInFunctions(func) => {
+                        TokenType::BuiltInFunction(func) => {
                             let next_parsed = self.parse_next();
 
                             if let Some(parsed_unwrapped) = next_parsed {
                                 if let Statements::Expression(expression) = parsed_unwrapped.statement_type {
                                     args.push(expression);
                                 } else {
-                                    throw_err!(self, "Expected expression inside format");
+                                    error_and_skip!(self, ErrorKind::InvalidToken, Statements::ExpressionEmpty.type_string(), parsed_unwrapped.statement_type.type_string());
                                 }
                             } else {
-                                throw_err!(self, "Failed to parse format arg");
+                                // Don't error, because parsing failing already prints error and
+                                // skips
+                                return None;
                             }
                         },
                         _ => {
-                            throw_err!(self, "Invalid arg given to format");
+                            error_and_skip!(self, ErrorKind::InvalidToken, Statements::ExpressionEmpty.type_string(), arg_token.kind.type_string());
                         }
                     }
                 },
@@ -99,7 +116,7 @@ impl<'a> Parser<'a> {
                     break;
                 },
                 _ => {
-                    throw_err!(self, "");
+                    error_and_skip!(self, ErrorKind::InvalidToken, TokenType::Punctuation(Punctuations::ClosedParenthesis));
                 }
             }
         }
@@ -113,12 +130,12 @@ impl<'a> Parser<'a> {
         let func_name_tkn = self.current_token();
 
         let func_name: String = match &func_name_tkn.kind {
-            TokenType::Identifiers(Identifiers::Identifier(name)) => name.clone(),
+            TokenType::Identifier(Identifiers::Identifier(name)) => name.clone(),
             _ => String::new(),
         };
 
         if func_name.is_empty() {
-            throw_err!(self, "Parsing func name failed");
+            error_and_skip!(self, ErrorKind::InvalidToken, TokenType::Identifier(Identifiers::IdentifierEmpty).type_string(), func_name_tkn.kind.type_string());
         }
 
         self.advance_position();
@@ -130,13 +147,15 @@ impl<'a> Parser<'a> {
         let mut stack_mem_allocated = 0;
 
         loop {
-            match self.current_token().kind.clone() {
+            match &self.current_token().kind {
                 TokenType::Punctuation(Punctuations::ClosedParenthesis) => break,
                 TokenType::Keyword(Keywords::VariableType(var_type)) => {
                     self.advance_position();
 
-                    let TokenType::Identifiers(Identifiers::Identifier(arg_name)) = self.current_token().kind else {
-                        throw_err!(self, "Unknown token in function arg");
+                    let arg_name_tkn = self.current_token();
+
+                    let TokenType::Identifier(Identifiers::Identifier(arg_name)) = arg_name_tkn.kind else {
+                        error_and_skip!(self, ErrorKind::InvalidToken, TokenType::Identifier(Identifiers::IdentifierEmpty).type_string(), arg_name_tkn.kind.type_string());
                     };
 
                     self.advance_position();
@@ -151,7 +170,9 @@ impl<'a> Parser<'a> {
 
                     expect_token_with_err!(TokenType::Punctuation(Punctuations::OpenSquareBracket), self);
 
-                    let memory_location : MemoryLocationsAst = match self.current_token().kind {
+                    let memory_loc_tkn = self.current_token();
+
+                    let memory_location : MemoryLocationsAst = match memory_loc_tkn.kind {
                         TokenType::MemoryLocation(MemoryLocations::Stack) => {
                             self.advance_position();
                             stack_mem_allocated += var_type.get_variable_size();
@@ -162,8 +183,10 @@ impl<'a> Parser<'a> {
 
                             expect_token_with_err!(TokenType::Punctuation(Punctuations::OpenParenthesis), self);
 
-                            let TokenType::Identifiers(Identifiers::Identifier(arg_register)) = self.current_token().kind else {
-                                throw_err!(self, "");
+                            let arg_reg_tkn = self.current_token();
+
+                            let TokenType::Identifier(Identifiers::Identifier(arg_register)) = arg_reg_tkn.kind else {
+                                error_and_skip!(self, ErrorKind::InvalidToken, TokenType::Identifier(Identifiers::IdentifierEmpty).type_string(), arg_reg_tkn.kind.type_string());
                             };
 
                             self.advance_position();
@@ -173,26 +196,28 @@ impl<'a> Parser<'a> {
                             MemoryLocationsAst::Register(arg_register)
                         },
                         _ => {
-                            throw_err!(self, "");
+                            error_and_skip!(self, ErrorKind::InvalidToken, TokenType::MemoryLocationEmpty.type_string(), memory_loc_tkn.kind.type_string());
                         }
                     };
                     
                     expect_token_with_err!(TokenType::Punctuation(Punctuations::ClosedSquareBracket), self);
 
-                    match self.current_token().kind {
+                    let next_tkn = self.current_token();
+
+                    match next_tkn.kind {
                         TokenType::Punctuation(Punctuations::Comma) => {
                             self.advance_position();
                         },
                         TokenType::Punctuation(Punctuations::ClosedParenthesis) => {}
                         _ => {
-                            throw_err!(self, "Expected comma or closed parenthesis");
+                            error_and_skip!(self, ErrorKind::InvalidToken, TokenType::Punctuation(Punctuations::ClosedParenthesis), next_tkn.kind);
                         }
                     }
 
-                    args.push(FunctionArg { arg_var_type: var_type, arg_name, memory_location });
+                    args.push(FunctionArg { arg_var_type: var_type.clone(), arg_name, memory_location });
                 },
                 _ => {
-                    throw_err!(self, "Unknown syntax err");
+                    error_and_skip!(self, ErrorKind::Unknown);
                 }
             };
         }
@@ -214,14 +239,16 @@ impl<'a> Parser<'a> {
 
     pub fn parse_variable_declaration(&mut self, first_token : &Token, var_type : VariableType, var_name : &String) -> Option<Statement> {
         if var_type == VariableType::Void {
-            throw_err!(self, "Can't declare variable as void");
+            error_and_skip!(self, ErrorKind::VariableCannotBeVoid);
         }
 
         let end_pos;
 
         self.advance_position();
 
-        let value : Option<Expression> = match self.current_token().kind {
+        let value_tkn = self.current_token();
+
+        let value : Option<Expression> = match value_tkn.kind {
             TokenType::Operator(operator) => {
                 if operator == Operators::Assignment {
                     self.advance_position();
@@ -229,7 +256,7 @@ impl<'a> Parser<'a> {
                     let option_value = self.parse_expr();
 
                     if option_value.is_none() {
-                        throw_err!(self, "Please Provide a valid value");
+                        error_and_skip!(self, ErrorKind::ExpectedToken, Statements::ExpressionEmpty.type_string());
                     }
 
                     let value = option_value.unwrap();
@@ -242,7 +269,7 @@ impl<'a> Parser<'a> {
         
                     Some(value)
                 } else {
-                    throw_err!(self, "Invalid identifier found");
+                    error_and_skip!(self, ErrorKind::InvalidToken, TokenType::OperatorEmpty.type_string(), operator.type_string());
                 }
             },
            TokenType::Punctuation(Punctuations::Semicolon) => {
@@ -253,7 +280,7 @@ impl<'a> Parser<'a> {
                 None
             },
             _ => {
-                throw_err!(self, "Invalid identifier found");
+                error_and_skip!(self, ErrorKind::Unknown);
             }
         };
 
@@ -268,31 +295,29 @@ impl<'a> Parser<'a> {
             TokenType::EOF => {
                 return Some(Statement::new(&token, token.end_pos, Statements::EOF));
             },
-            TokenType::BuiltInFunctions(BuiltInFunctions::Format) => {
+            TokenType::BuiltInFunction(BuiltInFunctions::Format) => {
                 return self.parse_format_built_in_function(&token);
             },
-            TokenType::BuiltInFunctions(BuiltInFunctions::StackOffset) => {
+            TokenType::BuiltInFunction(BuiltInFunctions::StackOffset) => {
                 self.advance_position();
 
                 expect_token_with_err!(TokenType::Punctuation(Punctuations::OpenParenthesis), self);
 
-                let TokenType::Identifiers(Identifiers::Identifier(var_name)) = self.current_token().kind else {
-                    throw_err!(self, "Expected identifier");
+                let var_name_tkn = self.current_token();
+
+                let TokenType::Identifier(Identifiers::Identifier(var_name)) = var_name_tkn.kind else {
+                    error_and_skip!(self, ErrorKind::InvalidToken, TokenType::IdentifierEmpty.type_string(), var_name_tkn.kind.type_string());
                 };
 
                 self.advance_position();
-
-                if TokenType::Punctuation(Punctuations::ClosedParenthesis) != self.current_token().kind {
-                    throw_err!(self, "Expected closed parenthesis");
-                };
 
                 let end_pos = self.current_token().end_pos;
 
-                self.advance_position();
+                expect_token_with_err!(TokenType::Punctuation(Punctuations::ClosedParenthesis), self);
 
                 return Some(Statement::new(&token, end_pos, Statements::Expression(Expression::BuiltInFunction(BuiltInFunctionsAst::StackOffset(var_name)))));
             },
-            TokenType::BuiltInFunctions(BuiltInFunctions::Assembly) => {
+            TokenType::BuiltInFunction(BuiltInFunctions::Assembly) => {
                 self.advance_position();
 
                 expect_token_with_err!(TokenType::Punctuation(Punctuations::OpenParenthesis), self);
@@ -303,19 +328,19 @@ impl<'a> Parser<'a> {
 
                         Expression::Literal(Literal::String(str))
                     },
-                    TokenType::BuiltInFunctions(BuiltInFunctions::Format) => {
+                    TokenType::BuiltInFunction(BuiltInFunctions::Format) => {
                         if let Some(format) = self.parse_next() {
                             if let Statements::Expression(Expression::BuiltInFunction(BuiltInFunctionsAst::Format(format))) = format.statement_type {
                                 Expression::BuiltInFunction(BuiltInFunctionsAst::Format(format))
                             } else {
-                                throw_err!(self, "Invalid token given to function asm");
+                                return None;
                             }
                         } else {
-                            throw_err!(self, "Failed to parse format");
+                            return None;
                         }
                     }
                     _ => {
-                        throw_err!(self, "Invalid token given to function asm");
+                        error_and_skip!(self, ErrorKind::InvalidToken, Statements::ExpressionEmpty.type_string(), token.kind.type_string());
                     }
                 };
 
@@ -323,19 +348,6 @@ impl<'a> Parser<'a> {
                 expect_token_with_err!(TokenType::Punctuation(Punctuations::Semicolon), self);
 
                 return Some(Statement::new(&token, self.current_token().end_pos, Statements::Expression(Expression::BuiltInFunction(BuiltInFunctionsAst::Assembly(Box::new(asm_code))))));
-            },
-            TokenType::Punctuation(Punctuations::ClosedBraces) => {
-                self.advance_position();
-
-                if self.scope_behaviour.last().unwrap().clone() == false {
-                    self.scope_behaviour.pop();
-
-                    return None;
-                }
-
-                self.scope_behaviour.pop();
-
-                return Some(Statement::new(&token, token.end_pos, Statements::StackFramePop))
             },
             TokenType::Keyword(keyword) => {
                 match keyword {
@@ -345,24 +357,30 @@ impl<'a> Parser<'a> {
 
                             expect_token_with_err!(TokenType::Punctuation(Punctuations::OpenSquareBracket), self);
 
-                            let TokenType::Keyword(Keywords::VariableType(arr_var_type)) = self.current_token().kind else {
-                                throw_err!(self, "Exepcted var type");
+                            let var_type_tkn = self.current_token();
+
+                            let TokenType::Keyword(Keywords::VariableType(arr_var_type)) = var_type_tkn.kind else {
+                                error_and_skip!(self, ErrorKind::InvalidToken, Keywords::VariableTypeEmpty.type_string(), var_type_tkn.kind.type_string());
                             };
 
                             self.advance_position();
 
                             expect_token_with_err!(TokenType::Punctuation(Punctuations::Comma), self);
 
-                            let TokenType::Literal(Literal::Number(item_count)) = self.current_token().kind else {
-                                throw_err!(self, "");
+                            let item_count_tkn = self.current_token();
+
+                            let TokenType::Literal(Literal::Number(item_count)) = item_count_tkn.kind else {
+                                error_and_skip!(self, ErrorKind::InvalidToken, Literal::NumberEmpty.to_string(), item_count_tkn.kind.type_string());
                             };
 
                             self.advance_position();
 
                             expect_token_with_err!(TokenType::Punctuation(Punctuations::ClosedSquareBracket), self);
 
-                            let TokenType::Identifiers(Identifiers::Identifier(var_name)) = self.current_token().kind else {
-                                throw_err!(self, "");
+                            let var_name_tkn = self.current_token();
+
+                            let TokenType::Identifier(Identifiers::Identifier(var_name)) = var_name_tkn.kind else {
+                                error_and_skip!(self, ErrorKind::InvalidToken, TokenType::IdentifierEmpty.type_string(), var_name_tkn.kind.type_string());
                             };
 
                             return self.parse_variable_declaration(&token, VariableType::Array(ArrayType{item_count : item_count as usize, variable_type: Box::new(arr_var_type)}), &var_name)
@@ -370,7 +388,9 @@ impl<'a> Parser<'a> {
 
                         self.advance_position();
 
-                        match self.current_token().kind {
+                        let punc_tkn = self.current_token();
+
+                        match punc_tkn.kind.clone() {
                             TokenType::Punctuation(punctuation) => {
                                 match punctuation {
                                     Punctuations::Colon => {
@@ -378,75 +398,77 @@ impl<'a> Parser<'a> {
                                         // Handle func decl
                                     },
                                     _ => {
-                                        throw_err!(self, "Unknown Punctuation");
+                                        error_and_skip!(self, ErrorKind::InvalidToken, TokenType::Punctuation(Punctuations::Colon), punc_tkn.kind);
                                     }
                                 }
                             },
-                            TokenType::Identifiers(identifier) => {
+                            TokenType::Identifier(identifier) => {
                                 match identifier {
                                     Identifiers::Identifier(var_name) => {
                                         return self.parse_variable_declaration(&token, var_type, &var_name);
                                     },
                                     _ => {
-                                        throw_err!(self, "Unknown Identifier");
+                                        error_and_skip!(self, ErrorKind::InvalidToken, TokenType::IdentifierEmpty.type_string(), identifier.type_string());
                                     }
                                 }
                             }
                             _ => {
-                                throw_err!(self, "Syntax Error");
+                                error_and_skip!(self, ErrorKind::Unknown);
                             }
                         }
+                    },
+                    _ => {
+                        error_and_skip!(self, ErrorKind::Unknown);
                     }
                 }
             },
-            TokenType::Identifiers(Identifiers::Identifier(identifier)) => {
+            TokenType::Identifier(Identifiers::Identifier(identifier)) => {
                 self.advance_position();
 
                 match self.current_token().kind {
                     TokenType::Operator(Operators::Assignment) => {
                         self.advance_position();
 
-                        let expr : Expression = match self.current_token().kind {
+                        let expr_tkn = self.current_token();
+
+                        let expr : Expression = match expr_tkn.kind {
                             TokenType::Literal(literal) => {
                                 self.advance_position();
 
                                 Expression::Literal(literal)
                             },
-                            TokenType::Identifiers(Identifiers::Identifier(identifier)) => {
+                            TokenType::Identifier(Identifiers::Identifier(identifier)) => {
                                 self.advance_position();
 
                                 Expression::Identifier(Identifiers::Identifier(identifier))
                             },
-                            TokenType::BuiltInFunctions(_) => {
+                            TokenType::BuiltInFunction(func) => {
                                 let Some(parsed) = self.parse_next() else {
-                                    throw_err!(self, "Expected expression after assignment");
+                                    // If err happened during parsing - skipped already
+                                    return None;
                                 };
 
                                 let Statements::Expression(expr) = parsed.statement_type else {
-                                    throw_err!(self, "Built in function invalid");
+                                    error_and_skip!(self, ErrorKind::InvalidToken, Statements::ExpressionEmpty.type_string(), func.type_string());
                                 };
 
                                 expr
                             },
                             _ => {
-                                throw_err!(self, "Invalid expression given");
+                                error_and_skip!(self, ErrorKind::InvalidToken, Statements::ExpressionEmpty.type_string(), expr_tkn.kind.type_string());
                             }
                         };
 
-                        if TokenType::Punctuation(Punctuations::Semicolon) != self.current_token().kind {
-                            throw_err!(self, "Expected semicolon after assign");
-                        }
-
-                        self.advance_position();
+                        expect_token_with_err!(TokenType::Punctuation(Punctuations::Semicolon), self);
 
                         return Some(Statement::new(&token, self.current_token().end_pos, Statements::Assignment(Assignment {identifier: identifier, expression: expr})));
                     },
                     _ => {
-                        throw_err!(self, "Invalid token given after identifier");
+                        error_and_skip!(self, ErrorKind::Unknown);
                     }
                 }
             },
-            TokenType::BuiltInFunctions(BuiltInFunctions::Compare) => {
+            TokenType::BuiltInFunction(BuiltInFunctions::Compare) => {
                 self.advance_position();
 
                 expect_token_with_err!(TokenType::Punctuation(Punctuations::OpenParenthesis), self);
@@ -454,7 +476,7 @@ impl<'a> Parser<'a> {
                 let first_expr = self.handle_expr();
 
                 let Some(first_expr_unwrapped) = first_expr else {
-                    throw_err!(self, "invalid expr in compare");
+                    error_and_skip!(self, ErrorKind::ExpectedToken, Statements::ExpressionEmpty.type_string());
                 };
 
                 expect_token_with_err!(TokenType::Punctuation(Punctuations::Comma), self);
@@ -462,7 +484,7 @@ impl<'a> Parser<'a> {
                 let second_expr = self.handle_expr();
 
                 let Some(second_expr_unwrapped) = second_expr else {
-                    throw_err!(self, "invalid expr in compare");
+                    error_and_skip!(self, ErrorKind::ExpectedToken, Statements::ExpressionEmpty.type_string());
                 };
                 
                 expect_token_with_err!(TokenType::Punctuation(Punctuations::ClosedParenthesis), self);
@@ -483,7 +505,7 @@ impl<'a> Parser<'a> {
                             self.advance_position();
 
                             let Some(mut cmp_condition_unwrapped) = cmp_condition else {
-                                throw_err!(self, "Invalid cmp condition given");
+                                error_and_skip!(self, ErrorKind::ExpectedToken, Statements::CompareEmpty.type_string());
                             };
 
                             expect_token_with_err!(TokenType::Punctuation(Punctuations::OpenBraces), self);
@@ -504,20 +526,22 @@ impl<'a> Parser<'a> {
                             break;
                         },
                         _ => {
-                            throw_err!(self, "Invalid token inside cmp");
+                            error_and_skip!(self, ErrorKind::Unknown);
                         }
                     }
                 }
 
                 return Some(Statement::new(&token, end_pos, Statements::Compare(Compare{conditions: conditions, expressions: [first_expr_unwrapped, second_expr_unwrapped]})))
             },
-            TokenType::BuiltInFunctions(BuiltInFunctions::BranchLinked) => {
+            TokenType::BuiltInFunction(BuiltInFunctions::BranchLinked) => {
                 self.advance_position();
 
                 expect_token_with_err!(TokenType::Punctuation(Punctuations::OpenParenthesis), self);
 
-                let TokenType::Identifiers(Identifiers::Identifier(identifier)) = self.current_token().kind else {
-                    throw_err!(self, "Expected function");
+                let identifier_tkn = self.current_token();
+
+                let TokenType::Identifier(Identifiers::Identifier(identifier)) = identifier_tkn.kind else {
+                    error_and_skip!(self, ErrorKind::InvalidToken, TokenType::IdentifierEmpty.type_string(), identifier_tkn.kind.type_string());
                 };
 
                 self.advance_position();
@@ -533,11 +557,13 @@ impl<'a> Parser<'a> {
                         TokenType::Punctuation(Punctuations::Comma) => {
                             self.advance_position();
 
-                            match self.current_token().kind {
+                            let expr_tkn = self.current_token();
+
+                            match expr_tkn.kind {
                                 TokenType::Literal(literal) => args.push(Expression::Literal(literal)),
-                                TokenType::Identifiers(identifier) => args.push(Expression::Identifier(identifier)),
+                                TokenType::Identifier(identifier) => args.push(Expression::Identifier(identifier)),
                                 _ => {
-                                    throw_err!(self, "");
+                                    error_and_skip!(self, ErrorKind::InvalidToken, Statements::ExpressionEmpty.type_string(), expr_tkn.kind.type_string());
                                 }
                             }
 
@@ -546,7 +572,7 @@ impl<'a> Parser<'a> {
                             continue;
                         },
                         _ => {
-                            throw_err!(self, "Syntax Error");
+                            error_and_skip!(self, ErrorKind::Unknown);
                         }
                     }
                 }
@@ -558,7 +584,7 @@ impl<'a> Parser<'a> {
                 return Some(Statement::new(&token, end_pos, Statements::Expression(Expression::BuiltInFunction(BuiltInFunctionsAst::BranchLinked(BranchLinkedAst{args, function_name: identifier})))));
             }
             _ => {
-                throw_err!(self, "Syntax Error");
+                error_and_skip!(self, ErrorKind::Unknown);
             }
         };
     }
@@ -570,7 +596,7 @@ impl<'a> Parser<'a> {
 
                 return Some(Expression::Literal(literal));
             },
-            TokenType::BuiltInFunctions(_) => {
+            TokenType::BuiltInFunction(_) => {
                 let Some(parsed_func) = self.parse_next() else {
                     return None;
                 };
@@ -583,7 +609,7 @@ impl<'a> Parser<'a> {
 
                 Some(expr)
             },
-            TokenType::Identifiers(Identifiers::Identifier(identifier)) => {
+            TokenType::Identifier(Identifiers::Identifier(identifier)) => {
                 self.advance_position();
 
                 Some(Expression::Identifier(Identifiers::Identifier(identifier)))
@@ -594,6 +620,14 @@ impl<'a> Parser<'a> {
 
     pub fn handle_error(&mut self, error : &str) -> () {
         self.program_data.errors.push(String::from(error));
+        self.skip_until_semicolon();
+
+        self.advance_position();
+
+        return;
+    }
+
+    pub fn skip_statement(&mut self) -> () {
         self.skip_until_semicolon();
 
         self.advance_position();
@@ -622,7 +656,7 @@ impl<'a> Parser<'a> {
             let expr = self.parse_expr();
 
             let Some(unwrapped_expr) = expr else {
-                throw_err!(self, "Expected valid expr");
+                error_and_skip!(self, ErrorKind::ExpectedToken, Statements::ExpressionEmpty.type_string());
             };
 
             result.items.push(unwrapped_expr);
@@ -643,7 +677,7 @@ impl<'a> Parser<'a> {
                     continue;
                 }
                 _ => {
-                    throw_err!(self, "");
+                    error_and_skip!(self, ErrorKind::Unknown);
                 }
             }
         }
@@ -667,7 +701,7 @@ impl<'a> Parser<'a> {
 
                 arr_init
             },
-            TokenType::Identifiers(Identifiers::Identifier(identifier)) => {
+            TokenType::Identifier(Identifiers::Identifier(identifier)) => {
                 self.advance_position();
 
                 Some(Expression::Identifier(Identifiers::Identifier(identifier)))
@@ -705,7 +739,7 @@ impl<'a> Parser<'a> {
 
     pub fn expect_token(&mut self, token_type : TokenType) -> Result<(), ()> {
         if self.current_token().kind != token_type {
-            let err = format!("Current token type: {:?} Expected: {:?}", self.current_token().kind.clone(), token_type);
+            let err = ErrorKind::InvalidToken.format_message(err_args!(token_type, self.current_token().kind));
 
             self.handle_error(err.as_str());
 

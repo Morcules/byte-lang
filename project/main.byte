@@ -37,6 +37,8 @@ void : main() {
         .eq {
             array[u64, 4] arr = [1, 2, 3, 4];
 
+            //arr[0] = 0;//
+
             bl(term, 1);
         }
     }

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::datatypes::{ast_statements::{Function, FunctionArg, MemoryLocationsAst, Statement}, stack_frame::{StackFrame, StackVariable}, token::Token};
+use crate::datatypes::{ast_statements::{Function, FunctionArg, MemoryLocationsAst, Statement}, scope::{Scope, StackVariable}, token::Token};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct StackVariableRef {
@@ -16,7 +16,7 @@ pub struct FunctionStackArgRef {
 
 #[derive(PartialEq, Clone, Debug)]
 pub struct ProgramData {
-    pub stack_frames : Vec<StackFrame>,
+    pub scopes : Vec<Scope>,
     pub functions : HashMap<String, Function>,
     pub statements : Vec<Statement>,
     pub source_code : String,
@@ -26,35 +26,35 @@ pub struct ProgramData {
 
 impl ProgramData {
     pub fn new() -> Self {
-        Self { stack_frames: Vec::new(), functions: HashMap::new(), source_code: String::new(), tokens: Vec::new(), statements: Vec::new(), errors: Vec::new() }
+        Self { scopes: Vec::new(), functions: HashMap::new(), source_code: String::new(), tokens: Vec::new(), statements: Vec::new(), errors: Vec::new() }
     }
 
-    pub fn get_stack_frame_by_index(&self, index : usize) -> &'_ StackFrame {
-        return self.stack_frames.get(index).unwrap();
+    pub fn get_scope_by_index(&self, index : usize) -> &'_ Scope {
+        return self.scopes.get(index).unwrap();
     }
 
-    pub fn get_stack_variable_ref(&mut self, stack_frame : usize, var_name : &str) -> Option<StackVariableRef> {
-        let frame = self.get_stack_frame_by_index(stack_frame);
+    pub fn get_stack_variable_ref(&mut self, scope : usize, var_name : &str) -> Option<StackVariableRef> {
+        let scope = self.get_scope_by_index(scope);
 
-        if let Some(var) = frame.variables.get(var_name) {
+        if let Some(var) = scope.variables.get(var_name) {
             let mut offset = 0;
             
-            if frame.parent != usize::MAX {
-                let mut current_frame_idx = frame.parent;
+            if scope.parent != usize::MAX {
+                let mut current_scope_idx = scope.parent;
                 loop {
-                    let stack_frame_borrow = self.get_stack_frame_by_index(current_frame_idx);
+                    let scope_borrow = self.get_scope_by_index(current_scope_idx);
 
-                    offset += stack_frame_borrow.stack_mem_allocated;
+                    offset += scope_borrow.stack_mem_allocated;
                     
-                    if stack_frame_borrow.parent == usize::MAX {
+                    if scope_borrow.parent == usize::MAX {
                         break;
                     }
 
-                    current_frame_idx = stack_frame_borrow.parent;
+                    current_scope_idx = scope_borrow.parent;
                 }
             }
 
-            let func = self.functions.get(&frame.function).unwrap();
+            let func = self.functions.get(&scope.function).unwrap();
 
             let final_offset = func.stack_mem_allocated - (offset + var.offset + var.variable_size);
             
@@ -64,19 +64,19 @@ impl ProgramData {
             });
         }
 
-        if frame.parent == usize::MAX {
+        if scope.parent == usize::MAX {
             return None;
         }
 
         self.get_stack_variable_ref(
-            frame.parent,
+            scope.parent,
             var_name
         )
     }
 
     // Get refrence to stack arg
-    pub fn get_function_stack_arg_ref(&self, stack_frame : usize, identifier : &str) -> Option<FunctionStackArgRef> {
-        let function_name = self.get_stack_frame_by_index(stack_frame).function.clone();
+    pub fn get_function_stack_arg_ref(&self, scope : usize, identifier : &str) -> Option<FunctionStackArgRef> {
+        let function_name = self.get_scope_by_index(scope).function.clone();
 
         let func_arg_stack_mem_allocated = self.functions.get(&function_name).unwrap().arg_stack_mem_allocated.clone();
         let func_stack_mem_allocated = self.functions.get(&function_name).unwrap().stack_mem_allocated.clone();
@@ -94,25 +94,25 @@ impl ProgramData {
     }
 
     // Get total amount of mem to allocate (MAX used by scopes)
-    pub fn traverse_stack_frame_memory(&self, stack_frame_idx: usize) -> usize {
-        let frame = self.get_stack_frame_by_index(stack_frame_idx);
+    pub fn traverse_scope_memory(&self, scope_idx: usize) -> usize {
+        let scope = self.get_scope_by_index(scope_idx);
 
         let mut required = 0;
 
-        for child_idx in &frame.children {
-            let child_needed = self.traverse_stack_frame_memory(child_idx.clone());
+        for child_idx in &scope.children {
+            let child_needed = self.traverse_scope_memory(child_idx.clone());
             if child_needed > required {
                 required = child_needed;
             }
         }
 
-        return required + frame.stack_mem_allocated;
+        return required + scope.stack_mem_allocated;
     }
 
     // Get stack memory allocated for function
-    pub fn get_func_stack_memory(&self, stack_frame_idx: usize) -> usize {
-        let stack_frame_borrow = self.get_stack_frame_by_index(stack_frame_idx);
-        let func = self.functions.get(&stack_frame_borrow.function).unwrap();
+    pub fn get_func_stack_memory(&self, scope_idx: usize) -> usize {
+        let scope_borrow = self.get_scope_by_index(scope_idx);
+        let func = self.functions.get(&scope_borrow.function).unwrap();
         let mem = func.stack_mem_allocated;
 
         return mem;

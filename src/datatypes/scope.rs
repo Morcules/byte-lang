@@ -12,7 +12,7 @@ pub struct StackVariable {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct StackFrame {
+pub struct Scope {
     pub variables: HashMap<String, StackVariable>,
     pub stack_mem_allocated : usize,
     pub statements : Vec<Statement>,
@@ -22,7 +22,7 @@ pub struct StackFrame {
     pub function : String
 }
 
-impl StackFrame {
+impl Scope {
     pub fn new(parent : usize, function_name : String) -> Self {
         return Self { variables: HashMap::new(), stack_mem_allocated: 0, statements: Vec::new(), cg_statements: Vec::new(), children: Vec::new(), parent: parent, function: function_name }
     }
