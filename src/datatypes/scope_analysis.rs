@@ -1,11 +1,17 @@
-use crate::datatypes::{ast_statements::{BuiltInFunctionsAst, Expression, Function, Statement, Statements, VariableDeclaration}, program_data::ProgramData, scope::{Scope, StackVariable}};
+use crate::datatypes::{ast_statements::{BuiltInFunctionsAst, Expression, Function, Statement, Statements, VariableDeclaration}, errors::ErrorKind, program_data::ProgramData, scope::{Scope, StackVariable}};
 
-macro_rules! throw_err {
+macro_rules! error_and_skip {
+    ($self:expr, $error:expr, $($arg:expr),+ $(,)?) => {
+        $self.handle_error(&$error.format_message(&[$($arg),+]));
+        return;
+    };
+
     ($self:expr, $error:expr) => {
-        $self.throw_err($error);
+        $self.handle_error($error.template());
 
         return;
     };
+
 }
 
 pub struct ScopeAnalysis<'a> {
@@ -22,11 +28,12 @@ impl<'a> ScopeAnalysis<'a> {
     pub fn process_statement(&mut self, statement : &mut Statement) -> () {
         if let Statements::FunctionDeclaration(func_declaration) = &mut statement.statement_type {
             if self.scope_stack.len() != 0 {
-                throw_err!(self, "Scope len invalid");
+                let top_function_name = self.get_current_scope().function.clone();
+                error_and_skip!(self, ErrorKind::NestedFunction, func_declaration.name.clone(), top_function_name);
             }
 
             if self.program_data.functions.get(&func_declaration.name).is_some() {
-                throw_err!(self, &format!("Duplicate function: {}", func_declaration.name));
+                error_and_skip!(self, ErrorKind::DuplicateDefinition, func_declaration.name.clone());
             }
 
             let scope_index = self.program_data.scopes.len();
@@ -64,7 +71,7 @@ impl<'a> ScopeAnalysis<'a> {
 
                 self.add_statement_to_current_scope(statement);
             }
-            Statements::Expression(Expression::BuiltInFunction(BuiltInFunctionsAst::BranchLinked(bl))) => {
+            Statements::Expression(Expression::BuiltInFunction(BuiltInFunctionsAst::BranchLinked(_))) => {
                 self.add_statement_to_current_scope(statement);
             },
             Statements::VariableDeclaration(var_declaration) => {
@@ -111,7 +118,7 @@ impl<'a> ScopeAnalysis<'a> {
         return new_scope_index;
     }
 
-    pub fn throw_err(&mut self, err : &str) -> () {
+    pub fn handle_error(&mut self, err : &str) -> () {
         self.program_data.errors.push(String::from(err));
 
         self.advance_position();
@@ -147,9 +154,7 @@ impl<'a> ScopeAnalysis<'a> {
 
     pub fn add_var_to_scope(&mut self, var : &VariableDeclaration) -> () {
         if self.check_if_var_exists(var) == true {
-            self.throw_err(&format!("Duplicate variable: {}", var.name));
-
-            return;
+            error_and_skip!(self, ErrorKind::DuplicateDefinition, var.name.clone());
         }
 
         let current_scope = self.get_current_scope();

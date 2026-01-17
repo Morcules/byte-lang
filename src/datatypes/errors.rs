@@ -17,6 +17,7 @@ pub enum ErrorKind {
     InvalidType = 5,
     VariableCannotBeVoid = 6,
     ExpectedToken = 7,
+    NestedFunction = 8,
     Unknown = 255,
 }
 
@@ -30,6 +31,7 @@ impl ErrorKind {
         "invalid type - expected {}, found {}",
         "variables cannot have type 'void'",
         "invalid token - expected {}",
+        "Nested function - function {} declared inside {}"
     ];
 
     pub const fn template(&self) -> &'static str {
