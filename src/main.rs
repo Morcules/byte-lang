@@ -219,7 +219,7 @@ fn compile_file() {
         panic!("Errors: {:?}\n", program_data.errors);
     }
 
-    print!("Functions: {:?}\nStack Frames: {:?}\n", program_data.functions, program_data.stack_frames);
+    print!("Functions: {:?}\nScopes: {:?}\n", program_data.functions, program_data.scopes);
 
     compute_correct_memory_in_functions(&mut program_data);
 
@@ -263,9 +263,9 @@ fn compute_correct_memory_in_functions(program_data : &mut ProgramData) -> () {
     let function_names : Vec<String> = program_data.functions.keys().cloned().collect();
 
     for function_name in function_names {
-        let first_stack_frame = program_data.functions.get(&function_name).unwrap().first_stack_frame.clone();
+        let first_scope = program_data.functions.get(&function_name).unwrap().first_scope.clone();
 
-        let total_mem_allocated = program_data.traverse_stack_frame_memory(first_stack_frame);
+        let total_mem_allocated = program_data.traverse_scope_memory(first_scope);
         let aligned_mem = align_memory(total_mem_allocated, 16);
     
         program_data.functions.get_mut(&function_name).unwrap().stack_mem_allocated = aligned_mem;

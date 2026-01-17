@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt::format};
 
-use crate::datatypes::{assembly_instructions::asm::*, ast_statements::{AstIdentifiers, CgBuiltInFunctions, CgExpression, CgIdentifiers, CgStatement, CgStatementType, CmpConditionType, Literal, MemoryLocationsAst, VariableType}, general_functions::align_memory, program_data::{ProgramData, StackVariableRef}, stack_frame::StackFrame};
+use crate::datatypes::{assembly_instructions::asm::*, ast_statements::{AstIdentifiers, CgBuiltInFunctions, CgExpression, CgIdentifiers, CgStatement, CgStatementType, CmpConditionType, Literal, MemoryLocationsAst, VariableType}, general_functions::align_memory, program_data::{ProgramData, StackVariableRef}, scope::Scope};
 
 pub struct CodeGenerator<'a> {
     program_data: &'a mut ProgramData,
@@ -13,7 +13,7 @@ impl<'a> CodeGenerator<'a> {
         return Self{program_data, stack_ptr: 0, labels: HashMap::new()};
     }
 
-    pub fn process_statement(&mut self, statement : &CgStatement, label: &str, stack_frame : usize) -> () {
+    pub fn process_statement(&mut self, statement : &CgStatement, label: &str, scope : usize) -> () {
         match statement.statement_type.clone() {
             CgStatementType::Compare(cmp) => {
                 match (cmp.expressions[0].clone(), cmp.expressions[1].clone()) {
@@ -27,7 +27,7 @@ impl<'a> CodeGenerator<'a> {
                             };
 
                             if found_match {
-                                result = condition.stack_frame;
+                                result = condition.scope;
                                 break;
                             }
                         }
@@ -64,7 +64,7 @@ impl<'a> CodeGenerator<'a> {
                 }
 
                 for condition in cmp.conditions {
-                    result.push_str(&format!("b.{} _{}\n", condition.to_string(), condition.stack_frame.to_string()));
+                    result.push_str(&format!("b.{} _{}\n", condition.to_string(), condition.scope.to_string()));
                 }
 
                 result.push_str(&goto(&cmp.new_exit_label));
@@ -186,16 +186,16 @@ impl<'a> CodeGenerator<'a> {
     }
 
     // Allocate stack memory and save return ptr in stack
-    pub fn initialize_stack_frame(&mut self, label: &str, stack_frame : usize) -> () {
-        let mem = self.program_data.get_func_stack_memory(stack_frame);
+    pub fn initialize_scope(&mut self, label: &str, scope : usize) -> () {
+        let mem = self.program_data.get_func_stack_memory(scope);
 
-        self.push_compiled_code_to_label(label, &create_stack_frame(mem));
+        self.push_compiled_code_to_label(label, &create_scope(mem));
     }
 
-    pub fn return_stack_frame(&mut self, label: &str, stack_frame : usize) -> () {
-        let mem = self.program_data.get_func_stack_memory(stack_frame);
+    pub fn return_scope(&mut self, label: &str, scope : usize) -> () {
+        let mem = self.program_data.get_func_stack_memory(scope);
 
-        self.push_compiled_code_to_label(label, &destroy_stack_frame(mem));
+        self.push_compiled_code_to_label(label, &destroy_scope(mem));
 
         return;
     }
@@ -216,26 +216,26 @@ impl<'a> CodeGenerator<'a> {
         self.labels.get_mut(label).unwrap().push_str(code);
     }
 
-    pub fn process_stack_frame(&mut self, stack_frame : usize, label: &str) -> () {
-        let stack_frame_parent = self.get_stack_frame_by_index(stack_frame).parent.clone();
+    pub fn process_scope(&mut self, scope : usize, label: &str) -> () {
+        let scope_parent = self.get_scope_by_index(scope).parent.clone();
 
-        if stack_frame_parent == usize::MAX {
-            self.initialize_stack_frame(label, stack_frame);
+        if scope_parent == usize::MAX {
+            self.initialize_scope(label, scope);
         }
 
-        for statement in self.get_stack_frame_by_index(stack_frame).cg_statements.clone().iter() {
-            self.process_statement(statement, label, stack_frame);
+        for statement in self.get_scope_by_index(scope).cg_statements.clone().iter() {
+            self.process_statement(statement, label, scope);
         }
 
-        if stack_frame_parent == usize::MAX {
-            self.return_stack_frame(label, stack_frame);
+        if scope_parent == usize::MAX {
+            self.return_scope(label, scope);
         }
 
         return;
     }
 
-    pub fn process_stack_frame_and_children(&mut self, stack_frame_index : usize, func_name : &str) -> () {
-        self.traverse_stack_frame_children(stack_frame_index, func_name);
+    pub fn process_scope_and_children(&mut self, scope_index : usize, func_name : &str) -> () {
+        self.traverse_scope_children(scope_index, func_name);
     }
 
     pub fn process_labels(&mut self) -> String {
@@ -256,31 +256,31 @@ impl<'a> CodeGenerator<'a> {
         for function_name in function_names {
             self.labels.insert(function_name.clone(), String::new());
 
-            let first_stack_frame = self.program_data.functions.get(&function_name).unwrap().first_stack_frame.clone();
+            let first_scope = self.program_data.functions.get(&function_name).unwrap().first_scope.clone();
 
-            self.process_stack_frame_and_children(first_stack_frame, &function_name);
+            self.process_scope_and_children(first_scope, &function_name);
         }
 
         return;
     }
 
-    pub fn traverse_stack_frame_children(&mut self, stack_frame_index : usize, label: &str) -> () {
-        let children = self.get_stack_frame_by_index(stack_frame_index).children.clone();
+    pub fn traverse_scope_children(&mut self, scope_index : usize, label: &str) -> () {
+        let children = self.get_scope_by_index(scope_index).children.clone();
 
-        self.process_stack_frame(stack_frame_index, label);
+        self.process_scope(scope_index, label);
 
         for child in children.iter() {
             self.labels.insert(child.to_string(), String::new());
 
-            self.traverse_stack_frame_children(child.clone(), &child.to_string());
+            self.traverse_scope_children(child.clone(), &child.to_string());
         }
     }
 
-    pub fn get_stack_frame_by_index(&self, index : usize) -> &'_ StackFrame {
-        return self.program_data.stack_frames.get(index).unwrap();
+    pub fn get_scope_by_index(&self, index : usize) -> &'_ Scope {
+        return self.program_data.scopes.get(index).unwrap();
     }
 
-    pub fn get_stack_frame_by_index_mut(&mut self, index : usize) -> &'_ mut StackFrame {
-        return self.program_data.stack_frames.get_mut(index).unwrap();
+    pub fn get_scope_by_index_mut(&mut self, index : usize) -> &'_ mut Scope {
+        return self.program_data.scopes.get_mut(index).unwrap();
     }
 }

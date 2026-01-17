@@ -1,6 +1,6 @@
 use std::panic;
 
-use crate::datatypes::{program_data::{self, ProgramData}, stack_frame, token::{BuiltInFunctions, Identifiers, MemoryLocations, Token, TokenType}};
+use crate::datatypes::{program_data::{self, ProgramData}, scope, token::{BuiltInFunctions, Identifiers, MemoryLocations, Token, TokenType}};
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Statement {
@@ -15,7 +15,7 @@ pub struct Statement {
 pub struct Function {
     pub return_type: VariableType,
     pub args: Vec<FunctionArg>,
-    pub first_stack_frame: usize,
+    pub first_scope: usize,
     pub arg_stack_mem_allocated: usize,
     pub stack_mem_allocated: usize
 }
@@ -70,6 +70,36 @@ pub enum Statements {
     Compare(Compare),
     StackFramePop,
     Expression(Expression),
+
+    // Is used only for erroring (for type_string func)
+    AssignmentEmpty,
+    VariableDeclarationEmpty,
+    FunctionDeclarationEmpty,
+    CompareEmpty,
+    ExpressionEmpty,
+}
+
+impl Statements {
+    pub fn type_string(&self) -> String {
+        let str : &str = match self {
+            Statements::EOF => "EOF",
+            Statements::Assignment(_) => "Variable assignment",
+            Statements::VariableDeclaration(_) => "Variable declaration",
+            Statements::FunctionDeclaration(_) => "Function declaration",
+            Statements::Compare(_) => "Compare function",
+            Statements::StackFramePop => "Stack frame pop",
+            Statements::Expression(expression) => &expression.type_string(),
+
+            Statements::AssignmentEmpty => "Variable assignment",
+            Statements::VariableDeclarationEmpty => "Variable declaration",
+            Statements::FunctionDeclarationEmpty => "Function declaration",
+            Statements::CompareEmpty => "Compare function",
+            Statements::ExpressionEmpty => "Expression",
+
+        };
+
+        return String::from(str);
+    }
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -78,6 +108,12 @@ pub enum BuiltInFunctionsAst {
     Format(Format),
     StackOffset(String),
     BranchLinked(BranchLinkedAst),
+
+    // Is used only for erroring (for type_string func)
+    AssemblyEmpty,
+    FormatEmpty,
+    StackOffsetEmpty,
+    BranchLinkedEmpty,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -99,12 +135,28 @@ pub struct BranchLinkedAst {
 }
 
 impl BuiltInFunctionsAst {
-    pub fn parse(&self, program_data : &mut ProgramData, stack_frame : usize) -> Option<Literal> {
+    pub fn type_string(&self) -> String {
+        let str : &str = match self {
+            BuiltInFunctionsAst::StackOffset(_) => "Built in function Stack Offset",
+            BuiltInFunctionsAst::Format(_) => "Built in function Format",
+            BuiltInFunctionsAst::Assembly(_) => "Built in function Assembly",
+            BuiltInFunctionsAst::BranchLinked(_) => "Built in function Branch Linked",
+            BuiltInFunctionsAst::StackOffsetEmpty => "Built in function Stack Offset",
+            BuiltInFunctionsAst::FormatEmpty => "Built in function Format",
+            BuiltInFunctionsAst::AssemblyEmpty => "Built in function Assembly",
+            BuiltInFunctionsAst::BranchLinkedEmpty => "Built in function Branch Linked"
+
+        };
+
+        return String::from(str);
+    }
+
+    pub fn parse(&self, program_data : &mut ProgramData, scope : usize) -> Option<Literal> {
         return match self {
             BuiltInFunctionsAst::StackOffset(identifier) => {
-                if let Some(var) = program_data.get_stack_variable_ref(stack_frame, identifier) {
+                if let Some(var) = program_data.get_stack_variable_ref(scope, identifier) {
                     Some(Literal::Number(var.local_offset as i64))
-                } else if let Some(arg) = program_data.get_function_stack_arg_ref(stack_frame, identifier) {
+                } else if let Some(arg) = program_data.get_function_stack_arg_ref(scope, identifier) {
                     Some(Literal::Number(arg.local_offset as i64))
                 } else {
                     panic!()
@@ -135,7 +187,7 @@ impl BuiltInFunctionsAst {
                                         result.push_str(&string);
                                     },
                                     Expression::BuiltInFunction(func) => {
-                                        let parsed_func = func.parse(program_data, stack_frame);
+                                        let parsed_func = func.parse(program_data, scope);
                                         result.push_str(&parsed_func.unwrap().to_string());
                                     }
                                     _ => {
@@ -187,6 +239,18 @@ pub enum Expression {
     BuiltInFunction(BuiltInFunctionsAst)
 }
 
+impl Expression {
+    pub fn type_string(&self) -> String {
+        let str : &str = match self {
+            Expression::Literal(literal) => &literal.type_string(),
+            Expression::Identifier(identifier) => &identifier.type_string(),
+            Expression::BuiltInFunction(built_in_function) => &built_in_function.type_string()
+        };
+
+        return String::from(str);
+    }
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub struct ArrayLiteral {
     pub items : Vec<Expression>,
@@ -197,7 +261,27 @@ pub struct ArrayLiteral {
 pub enum Literal {
     String(String),
     Number(i64),
-    Array(ArrayLiteral)
+    Array(ArrayLiteral),
+
+    // Is used only for erroring (for type_string func)
+    StringEmpty,
+    NumberEmpty,
+    ArrayEmpty
+}
+
+impl Literal {
+    pub fn type_string(&self) -> String {
+        let str : &str = match self {
+            Literal::String(_) => "String literal",
+            Literal::Number(_) => "Number literal",
+            Literal::Array(_) => "Array literal",
+            Literal::StringEmpty => "String literal",
+            Literal::NumberEmpty => "Number literal",
+            Literal::ArrayEmpty => "Array literal"
+        };
+
+        return String::from(str);
+    }
 }
 
 impl Literal {
@@ -335,12 +419,12 @@ pub enum CmpConditionType {
 pub struct CmpCondition {
     pub condition_type : CmpConditionType,
     pub body : Vec<Statement>,
-    pub stack_frame : usize
+    pub scope : usize
 }
 
 impl CmpCondition {
     pub fn new(condition_type : CmpConditionType) -> Self {
-        return Self{condition_type, body: Vec::new(), stack_frame: 0};
+        return Self{condition_type, body: Vec::new(), scope: 0};
     }
 
     pub fn set_body(&mut self, body : Vec<Statement>) -> () {
@@ -357,7 +441,7 @@ impl CmpCondition {
     }
 
     pub fn from_token(input : &Token) -> Option<Self> {
-        if let TokenType::Identifiers(Identifiers::Identifier(identifier)) = input.kind.clone() {
+        if let TokenType::Identifier(Identifiers::Identifier(identifier)) = input.kind.clone() {
             let cmp_type : CmpConditionType = match identifier.as_str() {
                 "eq" => {
                     CmpConditionType::Equal

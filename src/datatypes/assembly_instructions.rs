@@ -100,7 +100,7 @@ pub mod asm {
         return format!("b _{}\n", label);
     }
 
-    pub fn create_stack_frame(stack_memory_allocate : usize) -> String {
+    pub fn create_scope(stack_memory_allocate : usize) -> String {
         if stack_memory_allocate == 0 {
             return format!("str x30, [sp, #-16]!\n");
         } else {
@@ -108,7 +108,7 @@ pub mod asm {
         }
     }
 
-    pub fn destroy_stack_frame(stack_memory_allocated : usize) -> String {
+    pub fn destroy_scope(stack_memory_allocated : usize) -> String {
         if stack_memory_allocated == 0 {
             return format!("ldr x30, [sp], #16\nret\n");
         } else {
