@@ -1,6 +1,4 @@
 use std::collections::HashMap;
-use std::rc::Rc;
-use std::cell::RefCell;
 
 use crate::datatypes::ast_statements::{CgStatement, Statement, VariableType};
 

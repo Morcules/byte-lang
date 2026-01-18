@@ -1,6 +1,6 @@
-use std::{collections::HashMap, fmt::format};
+use std::collections::HashMap;
 
-use crate::datatypes::{assembly_instructions::asm::*, ast_statements::{AstIdentifiers, CgBuiltInFunctions, CgExpression, CgIdentifiers, CgStatement, CgStatementType, CmpConditionType, Literal, MemoryLocationsAst, VariableType}, general_functions::align_memory, program_data::{ProgramData, StackVariableRef}, scope::Scope};
+use crate::datatypes::{assembly_instructions::asm::*, ast_statements::{CgBuiltInFunctions, CgExpression, CgIdentifiers, CgStatement, CgStatementType, CmpConditionType, Literal, MemoryLocationsAst, VariableType}, program_data::ProgramData, scope::Scope};
 
 pub struct CodeGenerator<'a> {
     program_data: &'a mut ProgramData,

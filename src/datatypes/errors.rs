@@ -18,6 +18,11 @@ pub enum ErrorKind {
     VariableCannotBeVoid = 6,
     ExpectedToken = 7,
     NestedFunction = 8,
+    ExpectedStatement = 9,
+    InvalidStatement = 10,
+    UnknownIdentifier = 11,
+    ArgumentCountMismatch = 12,
+    VariableTypeMismatchExpected = 13,
     Unknown = 255,
 }
 
@@ -31,7 +36,12 @@ impl ErrorKind {
         "invalid type - expected {}, found {}",
         "variables cannot have type 'void'",
         "invalid token - expected {}",
-        "Nested function - function {} declared inside {}"
+        "Nested function - function {} declared inside {}",
+        "invalid statement - expected {}",
+        "invalid statement - expected {}, found {}",
+        "Unknown Identifier - found {}",
+        "Argument Count Mismatch - expected {}, found {} in branch to {}",
+        "Variable Type Mismatch - expected {}"
     ];
 
     pub const fn template(&self) -> &'static str {

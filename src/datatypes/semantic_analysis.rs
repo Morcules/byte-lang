@@ -1,13 +1,31 @@
-use std::{collections::HashMap, mem::zeroed, panic};
+use crate::{datatypes::{ast_statements::{BuiltInFunctionsAst, CgBranch, CgBranchLinked, CgBuiltInFunctions, CgCompare, CgExpression, CgIdentifiers, CgStatement, CgStatementType, CgVariableAssignment, Expression, Literal, StackVariableData, Statement, Statements, VariableType}, errors::ErrorKind, program_data::ProgramData, scope::{Scope, StackVariable}, token::Identifiers}, num_types};
 
-use crate::{datatypes::{ast_statements::{AstIdentifiers, BuiltInFunctionsAst, CgBranch, CgBranchLinked, CgBuiltInFunctions, CgCompare, CgExpression, CgIdentifiers, CgStatement, CgStatementType, CgVariableAssignment, Expression, FunctionArg, Literal, StackVariableData, Statement, Statements, VariableType}, program_data::ProgramData, scope::{Scope, StackVariable}, token::Identifiers}, num_types};
+macro_rules! error_and_skip {
+    ($self:expr, $error:expr, $($arg:expr),+ $(,)?) => {
+        $self.handle_error(&$error.format_message(&[$($arg),+]));
+        return;
+    };
 
-macro_rules! throw_err {
     ($self:expr, $error:expr) => {
-        $self.throw_err($error);
+        $self.handle_error($error.template());
 
         return;
     };
+
+}
+
+macro_rules! error_and_none {
+    ($self:expr, $error:expr, $($arg:expr),+ $(,)?) => {
+        $self.handle_error(&$error.format_message(&[$($arg),+]));
+        return None;
+    };
+
+    ($self:expr, $error:expr) => {
+        $self.handle_error($error.template());
+
+        return None;
+    };
+
 }
 
 pub struct SemanticAnaytis<'a> {
@@ -46,7 +64,7 @@ impl<'a> SemanticAnaytis<'a> {
                         cg_expressions[i] = cg_expr_unwrapped;
                         continue;
                     } else {
-                        throw_err!(self, "Failed to parse expr inside cmp");
+                        error_and_skip!(self, ErrorKind::Unknown);
                     }
                 }
 
@@ -68,13 +86,13 @@ impl<'a> SemanticAnaytis<'a> {
                 match func {
                     BuiltInFunctionsAst::BranchLinked(branch_linked) => {
                         if self.program_data.functions.get(&branch_linked.function_name).is_none() {
-                            panic!("Branching to unknown function: {:?}", branch_linked.function_name);
+                            error_and_skip!(self, ErrorKind::UnknownIdentifier, branch_linked.function_name);
                         }
 
                         let bl_function = self.program_data.functions.get(&branch_linked.function_name).unwrap().clone();
 
                         if branch_linked.args.len() != bl_function.args.len() {
-                            throw_err!(self, "Invalid arg length");
+                            error_and_skip!(self, ErrorKind::ArgumentCountMismatch, bl_function.args.len().to_string(), branch_linked.args.len().to_string(), branch_linked.function_name);
                         }
 
                         let mut cg_args : Vec<CgExpression> = Vec::new();
@@ -84,10 +102,12 @@ impl<'a> SemanticAnaytis<'a> {
                             let cg_expression = self.expression_to_cg(scope, branch_linked.args.get(i).unwrap().clone());
 
                             if let Some(cg_expression_unwrapped) = cg_expression {
-                                let valid = self.validate_cg_expr_with_var(&cg_expression_unwrapped, &bl_function.args.get(i).unwrap().arg_var_type);
+                                let var_type_expecting = bl_function.args.get(i).unwrap().arg_var_type.clone();
+
+                                let valid = self.validate_cg_expr_with_var(&cg_expression_unwrapped, &var_type_expecting);
 
                                 if !valid {
-                                    throw_err!(self, "Invalid args in bl");
+                                    error_and_skip!(self, ErrorKind::VariableTypeMismatchExpected, var_type_expecting);
                                 }
 
                                 cg_args.push(cg_expression_unwrapped);
@@ -105,7 +125,7 @@ impl<'a> SemanticAnaytis<'a> {
                                 func.parse(self.program_data, scope).unwrap().to_string()
                             },
                             _ => {
-                                throw_err!(self, "Invalid arg given to asm func");
+                                error_and_skip!(self, ErrorKind::Unknown);
                             }
                         };
 
@@ -130,14 +150,10 @@ impl<'a> SemanticAnaytis<'a> {
                     return Some(CgExpression::Identifier(CgIdentifiers::StackVariableData(StackVariableData{offset: function_arg_ref.local_offset, variable_type: function_arg_ref.var.arg_var_type})));
                 }
 
-                self.throw_err("Variable not found");
-
-                return None;
+                error_and_none!(self, ErrorKind::UnknownIdentifier, identifier);
             },
             _ => {
-                self.throw_err("Invalid Expression");
-
-                return None;
+                error_and_none!(self, ErrorKind::ExpectedStatement, Statements::ExpressionEmpty.type_string());
             }
         }
     }
@@ -240,7 +256,7 @@ impl<'a> SemanticAnaytis<'a> {
             let init_valid = self.match_var_type_with_expr(&stack_var_ref.var.variable_type, &mut expr, scope);
 
             if !init_valid {
-                throw_err!(self, "Invalid var declaration");
+                error_and_skip!(self, ErrorKind::VariableTypeMismatchExpected, stack_var_ref.var.variable_type.type_string());
             }
 
             let cg_val = self.expression_to_cg(scope, expr.clone());
@@ -254,7 +270,7 @@ impl<'a> SemanticAnaytis<'a> {
             let init_valid = self.match_var_type_with_expr(&function_arg_ref.var.arg_var_type, &mut expr, scope);
 
             if !init_valid {
-                throw_err!(self, "Invalid var declaration");
+                error_and_skip!(self, ErrorKind::VariableTypeMismatchExpected, function_arg_ref.var.arg_var_type.type_string());
             }
 
             let cg_val = self.expression_to_cg(scope, expr.clone());
@@ -265,7 +281,7 @@ impl<'a> SemanticAnaytis<'a> {
                 return;
             }
         } else {
-            throw_err!(self, "Expected assignment of valid identifier");
+            error_and_skip!(self, ErrorKind::UnknownIdentifier, identifier);
         }
     }
 
@@ -294,11 +310,11 @@ impl<'a> SemanticAnaytis<'a> {
         return self.random_label_num;
     }
 
-    pub fn throw_err(&mut self, err : &str) -> () {
+    pub fn handle_error(&mut self, err : &str) -> () {
         self.program_data.errors.push(String::from(err));
     }
 
-    pub fn borrow_stack_variable_with_sf_index(&self, scope : usize, variable_name : String) -> Option<&'_ StackVariable> {
+    pub fn borrow_stack_variable_with_scope_index(&self, scope : usize, variable_name : String) -> Option<&'_ StackVariable> {
         return self.get_scope_by_index(scope).variables.get(&variable_name);
     }
 
