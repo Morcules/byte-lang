@@ -1,8 +1,4 @@
-use crate::datatypes::ast_statements::CgExpression;
-
 pub mod asm {
-    use std::fmt::format;
-
     use crate::datatypes::ast_statements::VariableType;
 
     pub enum StackDestination {

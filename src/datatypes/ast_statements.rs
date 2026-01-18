@@ -1,6 +1,6 @@
 use std::panic;
 
-use crate::datatypes::{program_data::{self, ProgramData}, scope, token::{BuiltInFunctions, Identifiers, MemoryLocations, Token, TokenType}};
+use crate::datatypes::{program_data::ProgramData, token::{Identifiers, Token, TokenType}};
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Statement {
@@ -398,6 +398,27 @@ impl CmpCondition {
 // ***************************** //
 // *TYPE_STRING_IMPLEMENTATIONS* //
 // ***************************** //
+
+impl VariableType {
+    pub fn type_string(&self) -> String {
+        let str : &str = match self {
+            VariableType::I8 => "i8",
+            VariableType::I16 => "i16",
+            VariableType::I32 => "i32",
+            VariableType::I64 => "i64",
+            VariableType::U8 => "u8",
+            VariableType::U16 => "u16",
+            VariableType::U32 => "u32",
+            VariableType::U64 => "u64",
+            VariableType::Void => "void",
+            VariableType::Array(child) => {
+                &format!("Array[{}, {}]", child.variable_type.type_string(), child.item_count)
+            }
+        };
+
+        return String::from(str);
+    }
+}
 
 impl Statements {
     pub fn type_string(&self) -> String {
