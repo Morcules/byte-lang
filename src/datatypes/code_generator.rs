@@ -49,6 +49,9 @@ impl<'a> CodeGenerator<'a> {
                     (CgExpression::Literal(_), CgExpression::Identifier(CgIdentifiers::StackVariableData(_))) => {
                         expressions.swap(0, 1);
                     },
+                    (CgExpression::Literal(_), CgExpression::Identifier(CgIdentifiers::ArrayVariableData(_))) => {
+                        expressions.swap(0, 1);
+                    },
                     _ => {}
                 }
 
@@ -207,6 +210,20 @@ impl<'a> CodeGenerator<'a> {
             },
             CgExpression::Identifier(CgIdentifiers::StackVariableData(stack_var_data)) => {
                 return variable_to_reg(&temp_reg_for_type(stack_var_data.variable_type.clone(), true, temp_reg), stack_var_data.offset, stack_var_data.variable_type.clone());
+            },
+            CgExpression::Identifier(CgIdentifiers::ArrayVariableData(arr_var_data)) => {
+                let VariableType::Array(arr) = arr_var_data.variable_type.clone() else {
+                    unreachable!();
+                };
+
+                if let CgExpression::Literal(Literal::Number(num)) = *arr_var_data.arr_index {
+                    return variable_to_reg(
+                        &temp_reg_for_type(*arr.variable_type.clone(), true, temp_reg), 
+                        arr_var_data.offset + (arr.variable_type.get_variable_size() * num as usize), *arr.variable_type.clone()
+                    );
+                };
+
+                return String::new();
             },
             _ => todo!()
         }

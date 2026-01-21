@@ -57,8 +57,8 @@ pub struct FunctionDeclaration {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Assignment {
-    pub identifier : String,
-    pub expression : Expression
+    pub identifier : Expression,
+    pub value : Expression
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -194,7 +194,15 @@ pub struct VariableDeclaration {
 }
 
 #[derive(Debug, PartialEq, Clone)]
+pub struct ArrayIndex {
+    pub identifier : String,
+    pub index : Box<Expression>,
+    pub offset : usize
+}
+
+#[derive(Debug, PartialEq, Clone)]
 pub enum Expression {
+    ArrayIndex(ArrayIndex),
     Literal(Literal),
     Identifier(Identifiers),
     BuiltInFunction(BuiltInFunctionsAst)
@@ -253,7 +261,8 @@ pub enum VariableType {
     U32,
     U64,
     Void,
-    Array(ArrayType)
+    Array(ArrayType),
+    ArrayEmpty,
 }
 
 #[macro_export]
@@ -276,7 +285,8 @@ impl VariableType {
             VariableType::U32 => 4,
             VariableType::U64 => 8,
             VariableType::Array(arr) => arr.item_count * arr.variable_type.get_variable_size(),
-            VariableType::Void => 0
+            VariableType::Void => 0,
+            VariableType::ArrayEmpty => 0
         }
     }
 }
@@ -328,12 +338,20 @@ pub enum CgExpression {
 #[derive(Debug, PartialEq, Clone)]
 pub enum CgIdentifiers {
     StackVariableData(StackVariableData),
+    ArrayVariableData(ArrayVariableData)
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct StackVariableData {
     pub offset : usize,
     pub variable_type : VariableType
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct ArrayVariableData {
+    pub arr_index : Box<CgExpression>,
+    pub variable_type : VariableType,
+    pub offset : usize
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -412,8 +430,9 @@ impl VariableType {
             VariableType::U64 => "u64",
             VariableType::Void => "void",
             VariableType::Array(child) => {
-                &format!("Array[{}, {}]", child.variable_type.type_string(), child.item_count)
-            }
+                &format!("array[{}, {}]", child.variable_type.type_string(), child.item_count)
+            },
+            VariableType::ArrayEmpty => "array"
         };
 
         return String::from(str);
@@ -464,6 +483,9 @@ impl BuiltInFunctionsAst {
 impl Expression {
     pub fn type_string(&self) -> String {
         let str : &str = match self {
+            Expression::ArrayIndex(array_index) => {
+                &format!("ArrayIndex[{}]", array_index.index.type_string())
+            },
             Expression::Literal(literal) => &literal.type_string(),
             Expression::Identifier(identifier) => &identifier.type_string(),
             Expression::BuiltInFunction(built_in_function) => &built_in_function.type_string()

@@ -1,4 +1,4 @@
-use crate::datatypes::ast_statements::{ArrayLiteral, ArrayType, Assignment, BranchLinkedAst, BuiltInFunctionsAst, CmpCondition, Compare, Expression, Format, FunctionArg, FunctionDeclaration, Literal, MemoryLocationsAst, Statement, Statements, VariableDeclaration, VariableType};
+use crate::datatypes::ast_statements::{ArrayIndex, ArrayLiteral, ArrayType, Assignment, BranchLinkedAst, BuiltInFunctionsAst, CmpCondition, Compare, Expression, Format, FunctionArg, FunctionDeclaration, Literal, MemoryLocationsAst, Statement, Statements, VariableDeclaration, VariableType};
 use crate::datatypes::errors::ErrorKind;
 use crate::datatypes::general_functions::align_memory;
 use crate::datatypes::program_data::ProgramData;
@@ -417,46 +417,24 @@ impl<'a> Parser<'a> {
                     }
                 }
             },
-            TokenType::Identifier(Identifiers::Identifier(identifier)) => {
-                self.advance_position();
+            TokenType::Identifier(Identifiers::Identifier(_)) => {
+                let Some(identifier_expr) = self.parse_expr() else {
+                    error_and_skip!(self, ErrorKind::Unknown);
+                };
 
                 match self.current_token().kind {
                     TokenType::Operator(Operators::Assignment) => {
                         self.advance_position();
 
-                        let expr_tkn = self.current_token();
-
-                        let expr : Expression = match expr_tkn.kind {
-                            TokenType::Literal(literal) => {
-                                self.advance_position();
-
-                                Expression::Literal(literal)
-                            },
-                            TokenType::Identifier(Identifiers::Identifier(identifier)) => {
-                                self.advance_position();
-
-                                Expression::Identifier(Identifiers::Identifier(identifier))
-                            },
-                            TokenType::BuiltInFunction(func) => {
-                                let Some(parsed) = self.parse_next() else {
-                                    // If err happened during parsing - skipped already
-                                    return None;
-                                };
-
-                                let Statements::Expression(expr) = parsed.statement_type else {
-                                    error_and_skip!(self, ErrorKind::InvalidToken, Statements::ExpressionEmpty.type_string(), func.type_string());
-                                };
-
-                                expr
-                            },
-                            _ => {
-                                error_and_skip!(self, ErrorKind::InvalidToken, Statements::ExpressionEmpty.type_string(), expr_tkn.kind.type_string());
-                            }
+                        let Some(assign_value) = self.parse_expr() else {
+                            error_and_skip!(self, ErrorKind::ExpectedStatement, Statements::ExpressionEmpty.type_string());
                         };
+
+                        let end_pos = self.current_token().end_pos.clone();
 
                         expect_token_with_err!(TokenType::Punctuation(Punctuations::Semicolon), self);
 
-                        return Some(Statement::new(&token, self.current_token().end_pos, Statements::Assignment(Assignment {identifier: identifier, expression: expr})));
+                        return Some(Statement::new(&token, end_pos, Statements::Assignment(Assignment{identifier: identifier_expr, value: assign_value})));
                     },
                     _ => {
                         error_and_skip!(self, ErrorKind::Unknown);
@@ -699,7 +677,22 @@ impl<'a> Parser<'a> {
             TokenType::Identifier(Identifiers::Identifier(identifier)) => {
                 self.advance_position();
 
-                Some(Expression::Identifier(Identifiers::Identifier(identifier)))
+                match self.current_token().kind {
+                    TokenType::Punctuation(Punctuations::OpenSquareBracket) => {
+                        self.advance_position();
+
+                        let Some(arr_inx) = self.parse_expr() else {
+                            error_and_skip!(self, ErrorKind::ExpectedStatement, Statements::ExpressionEmpty.type_string());
+                        };
+
+                        expect_token_with_err!(TokenType::Punctuation(Punctuations::ClosedSquareBracket), self);
+
+                        Some(Expression::ArrayIndex(ArrayIndex{identifier: identifier, index: Box::new(arr_inx), offset: 0}))
+                    },
+                    _ => {
+                        Some(Expression::Identifier(Identifiers::Identifier(identifier)))
+                    }
+                }
             }
             _ => None
         };

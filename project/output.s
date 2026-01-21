@@ -1,6 +1,18 @@
 .global _main
 .align 16
 .text
+_term:
+str x30, [sp, #-16]!
+sub sp, sp, #16
+mov w10, #10
+str w10, [sp, #12]
+mov x1, #12
+mov x16, #1
+svc #0x80
+add sp, sp, #16
+ldr x30, [sp], #16
+ret
+
 _main:
 str x30, [sp, #-16]!
 sub sp, sp, #112
@@ -48,6 +60,19 @@ add sp, sp, #112
 ldr x30, [sp], #16
 ret
 
+_4:
+mov x10, #1
+str x10, [sp, #14]
+mov x10, #2
+str x10, [sp, #22]
+mov x10, #3
+str x10, [sp, #30]
+mov x10, #4
+str x10, [sp, #38]
+mov x0, #1
+bl _term
+b _main_1
+
 _test:
 str x30, [sp, #-16]!
 sub sp, sp, #16
@@ -67,29 +92,4 @@ str x10, [sp, #38]
 mov x0, #0
 bl _term
 b _main_1
-
-_4:
-mov x10, #1
-str x10, [sp, #14]
-mov x10, #2
-str x10, [sp, #22]
-mov x10, #3
-str x10, [sp, #30]
-mov x10, #4
-str x10, [sp, #38]
-mov x0, #1
-bl _term
-b _main_1
-
-_term:
-str x30, [sp, #-16]!
-sub sp, sp, #16
-mov w10, #10
-str w10, [sp, #12]
-mov x1, #12
-mov x16, #1
-svc #0x80
-add sp, sp, #16
-ldr x30, [sp], #16
-ret
 
