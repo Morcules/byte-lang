@@ -1,4 +1,6 @@
-use crate::{datatypes::{ast_statements::{BuiltInFunctionsAst, CgBranch, CgBranchLinked, CgBuiltInFunctions, CgCompare, CgExpression, CgIdentifiers, CgStatement, CgStatementType, CgVariableAssignment, Expression, Literal, StackVariableData, Statement, Statements, VariableType}, errors::ErrorKind, program_data::ProgramData, scope::{Scope, StackVariable}, token::Identifiers}, num_types};
+use std::clone;
+
+use crate::{datatypes::{ast_statements::{ArrayVariableData, BuiltInFunctionsAst, CgBranch, CgBranchLinked, CgBuiltInFunctions, CgCompare, CgExpression, CgIdentifiers, CgStatement, CgStatementType, CgVariableAssignment, Expression, Literal, StackVariableData, Statement, Statements, VariableType}, errors::ErrorKind, program_data::ProgramData, scope::{Scope, StackVariable}, token::Identifiers}, num_types};
 
 macro_rules! error_and_skip {
     ($self:expr, $error:expr, $($arg:expr),+ $(,)?) => {
@@ -45,7 +47,7 @@ impl<'a> SemanticAnaytis<'a> {
         match statement.statement_type.clone() {
             Statements::VariableDeclaration(var_init) => {
                 if let Some(init_value) = var_init.value {
-                    self.initialize_identifier(&var_init.name, init_value, scope);
+                    self.initialize_identifier(Expression::Identifier(Identifiers::Identifier(var_init.name)), init_value, scope);
                 };
 
                 return;
@@ -80,7 +82,7 @@ impl<'a> SemanticAnaytis<'a> {
                 self.add_cg_statement_to_scope(scope, CgStatement{statement_type: CgStatementType::Compare(CgCompare{conditions: cmp.conditions, expressions: cg_expressions, new_exit_label: branch_name})});
             },
             Statements::Assignment(assignment) => {
-                self.initialize_identifier(&assignment.identifier, assignment.expression, scope);
+                self.initialize_identifier(assignment.identifier, assignment.value, scope);
             },
             Statements::Expression(Expression::BuiltInFunction(func)) => {
                 match func {
@@ -151,6 +153,31 @@ impl<'a> SemanticAnaytis<'a> {
                 }
 
                 error_and_none!(self, ErrorKind::UnknownIdentifier, identifier);
+            },
+            Expression::ArrayIndex(arr_index) => {
+                if let Some(stack_var_ref) = self.program_data.get_stack_variable_ref(scope, &arr_index.identifier) {
+                    let VariableType::Array(_) = stack_var_ref.var.variable_type.clone() else {
+                        error_and_none!(self, ErrorKind::VariableTypeMismatchExpected, VariableType::ArrayEmpty.type_string(), stack_var_ref.var.variable_type.type_string());
+                    };
+
+                    let Some(arr_index_expr) = self.expression_to_cg(scope, *arr_index.index) else {
+                        error_and_none!(self, ErrorKind::Unknown);
+                    };
+
+                    return Some(CgExpression::Identifier(CgIdentifiers::ArrayVariableData(ArrayVariableData{arr_index: Box::new(arr_index_expr), variable_type: stack_var_ref.var.variable_type, offset: stack_var_ref.local_offset})));
+                } else if let Some(function_arg_ref) = self.program_data.get_function_stack_arg_ref(scope, &arr_index.identifier) {
+                    let VariableType::Array(_) = function_arg_ref.var.arg_var_type.clone() else {
+                        error_and_none!(self, ErrorKind::VariableTypeMismatchExpected, VariableType::ArrayEmpty.type_string(), function_arg_ref.var.arg_var_type.type_string());
+                    };
+
+                    let Some(arr_index_expr) = self.expression_to_cg(scope, *arr_index.index) else {
+                        error_and_none!(self, ErrorKind::Unknown);
+                    };
+
+                    return Some(CgExpression::Identifier(CgIdentifiers::ArrayVariableData(ArrayVariableData{arr_index: Box::new(arr_index_expr), variable_type: function_arg_ref.var.arg_var_type, offset: function_arg_ref.local_offset})));
+                }
+
+                error_and_none!(self, ErrorKind::UnknownIdentifier, arr_index.identifier);
             },
             _ => {
                 error_and_none!(self, ErrorKind::ExpectedStatement, Statements::ExpressionEmpty.type_string());
@@ -251,37 +278,47 @@ impl<'a> SemanticAnaytis<'a> {
         }
     }
 
-    pub fn initialize_identifier(&mut self, identifier : &str, mut expr : Expression, scope : usize) -> () {
-        if let Some(stack_var_ref) = self.program_data.get_stack_variable_ref(scope, identifier) {
-            let init_valid = self.match_var_type_with_expr(&stack_var_ref.var.variable_type, &mut expr, scope);
+    pub fn initialize_identifier(&mut self, var_expr : Expression, mut expr : Expression, scope : usize) -> () {
+        match var_expr {
+            Expression::Identifier(Identifiers::Identifier(identifier)) => {
+                if let Some(stack_var_ref) = self.program_data.get_stack_variable_ref(scope, &identifier) {
+                    let init_valid = self.match_var_type_with_expr(&stack_var_ref.var.variable_type, &mut expr, scope);
 
-            if !init_valid {
-                error_and_skip!(self, ErrorKind::VariableTypeMismatchExpected, stack_var_ref.var.variable_type.type_string());
+                    if !init_valid {
+                        error_and_skip!(self, ErrorKind::VariableTypeMismatchExpected, stack_var_ref.var.variable_type.type_string());
+                    }
+
+                    let cg_val = self.expression_to_cg(scope, expr.clone());
+
+                    if let Some(cg_val_unwrapped) = cg_val {
+                        self.add_cg_statement_to_scope(scope, CgStatement{statement_type: CgStatementType::VariableAssignment(CgVariableAssignment{assign_value: cg_val_unwrapped, stack_offset: stack_var_ref.local_offset, variable_type: stack_var_ref.var.variable_type})});
+                    } else {
+                        return;
+                    }
+                } else if let Some(function_arg_ref) = self.program_data.get_function_stack_arg_ref(scope, &identifier) {
+                    let init_valid = self.match_var_type_with_expr(&function_arg_ref.var.arg_var_type, &mut expr, scope);
+
+                    if !init_valid {
+                        error_and_skip!(self, ErrorKind::VariableTypeMismatchExpected, function_arg_ref.var.arg_var_type.type_string());
+                    }
+
+                    let cg_val = self.expression_to_cg(scope, expr.clone());
+
+                    if let Some(cg_val_unwrapped) = cg_val {
+                        self.add_cg_statement_to_scope(scope, CgStatement{statement_type: CgStatementType::VariableAssignment(CgVariableAssignment{assign_value: cg_val_unwrapped, stack_offset: function_arg_ref.local_offset, variable_type: function_arg_ref.var.arg_var_type})});
+                    } else {
+                        return;
+                    }
+                } else {
+                    error_and_skip!(self, ErrorKind::UnknownIdentifier, identifier);
+                }
+            },
+            Expression::ArrayIndex(arr_index) => {
+                
+            },
+            _ => {
+                error_and_skip!(self, ErrorKind::Unknown);
             }
-
-            let cg_val = self.expression_to_cg(scope, expr.clone());
-
-            if let Some(cg_val_unwrapped) = cg_val {
-                self.add_cg_statement_to_scope(scope, CgStatement{statement_type: CgStatementType::VariableAssignment(CgVariableAssignment{assign_value: cg_val_unwrapped, stack_offset: stack_var_ref.local_offset, variable_type: stack_var_ref.var.variable_type})});
-            } else {
-                return;
-            }
-        } else if let Some(function_arg_ref) = self.program_data.get_function_stack_arg_ref(scope, identifier) {
-            let init_valid = self.match_var_type_with_expr(&function_arg_ref.var.arg_var_type, &mut expr, scope);
-
-            if !init_valid {
-                error_and_skip!(self, ErrorKind::VariableTypeMismatchExpected, function_arg_ref.var.arg_var_type.type_string());
-            }
-
-            let cg_val = self.expression_to_cg(scope, expr.clone());
-
-            if let Some(cg_val_unwrapped) = cg_val {
-                self.add_cg_statement_to_scope(scope, CgStatement{statement_type: CgStatementType::VariableAssignment(CgVariableAssignment{assign_value: cg_val_unwrapped, stack_offset: function_arg_ref.local_offset, variable_type: function_arg_ref.var.arg_var_type})});
-            } else {
-                return;
-            }
-        } else {
-            error_and_skip!(self, ErrorKind::UnknownIdentifier, identifier);
         }
     }
 

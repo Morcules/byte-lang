@@ -23,6 +23,7 @@ pub enum ErrorKind {
     UnknownIdentifier = 11,
     ArgumentCountMismatch = 12,
     VariableTypeMismatchExpected = 13,
+    VariableTypeMismatch = 14,
     Unknown = 255,
 }
 
@@ -41,7 +42,8 @@ impl ErrorKind {
         "invalid statement - expected {}, found {}",
         "Unknown Identifier - found {}",
         "Argument Count Mismatch - expected {}, found {} in branch to {}",
-        "Variable Type Mismatch - expected {}"
+        "Variable Type Mismatch - expected {}",
+        "Variable Type Mismatch - expected {}, found {}"
     ];
 
     pub const fn template(&self) -> &'static str {
