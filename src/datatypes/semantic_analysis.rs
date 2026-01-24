@@ -103,10 +103,10 @@ impl<'a> SemanticAnaytis<'a> {
                         while i < branch_linked.args.len() {
                             let cg_expression = self.expression_to_cg(scope, branch_linked.args.get(i).unwrap().clone());
 
-                            if let Some(cg_expression_unwrapped) = cg_expression {
+                            if let Some(mut cg_expression_unwrapped) = cg_expression {
                                 let var_type_expecting = bl_function.args.get(i).unwrap().arg_var_type.clone();
 
-                                let valid = self.validate_cg_expr_with_var(&cg_expression_unwrapped, &var_type_expecting);
+                                let valid = self.validate_cg_expr_with_var(&mut cg_expression_unwrapped, &var_type_expecting, scope);
 
                                 if !valid {
                                     error_and_skip!(self, ErrorKind::VariableTypeMismatchExpected, var_type_expecting);
@@ -157,7 +157,7 @@ impl<'a> SemanticAnaytis<'a> {
             Expression::ArrayIndex(arr_index) => {
                 if let Some(stack_var_ref) = self.program_data.get_stack_variable_ref(scope, &arr_index.identifier) {
                     let VariableType::Array(_) = stack_var_ref.var.variable_type.clone() else {
-                        error_and_none!(self, ErrorKind::VariableTypeMismatchExpected, VariableType::ArrayEmpty.type_string(), stack_var_ref.var.variable_type.type_string());
+                        error_and_none!(self, ErrorKind::VariableTypeMismatch, VariableType::ArrayEmpty.type_string(), stack_var_ref.var.variable_type.type_string());
                     };
 
                     let Some(arr_index_expr) = self.expression_to_cg(scope, *arr_index.index) else {
@@ -167,7 +167,7 @@ impl<'a> SemanticAnaytis<'a> {
                     return Some(CgExpression::Identifier(CgIdentifiers::ArrayVariableData(ArrayVariableData{arr_index: Box::new(arr_index_expr), variable_type: stack_var_ref.var.variable_type, offset: stack_var_ref.local_offset})));
                 } else if let Some(function_arg_ref) = self.program_data.get_function_stack_arg_ref(scope, &arr_index.identifier) {
                     let VariableType::Array(_) = function_arg_ref.var.arg_var_type.clone() else {
-                        error_and_none!(self, ErrorKind::VariableTypeMismatchExpected, VariableType::ArrayEmpty.type_string(), function_arg_ref.var.arg_var_type.type_string());
+                        error_and_none!(self, ErrorKind::VariableTypeMismatch, VariableType::ArrayEmpty.type_string(), function_arg_ref.var.arg_var_type.type_string());
                     };
 
                     let Some(arr_index_expr) = self.expression_to_cg(scope, *arr_index.index) else {
@@ -282,39 +282,69 @@ impl<'a> SemanticAnaytis<'a> {
         match var_expr {
             Expression::Identifier(Identifiers::Identifier(identifier)) => {
                 if let Some(stack_var_ref) = self.program_data.get_stack_variable_ref(scope, &identifier) {
-                    let init_valid = self.match_var_type_with_expr(&stack_var_ref.var.variable_type, &mut expr, scope);
+                    let Some(mut cg_val) = self.expression_to_cg(scope, expr.clone()) else {
+                        error_and_skip!(self, ErrorKind::ExpectedStatement, Statements::ExpressionEmpty.type_string());
+                    };
+
+                    let init_valid = self.validate_cg_expr_with_var(&mut cg_val, &stack_var_ref.var.variable_type, scope);
 
                     if !init_valid {
                         error_and_skip!(self, ErrorKind::VariableTypeMismatchExpected, stack_var_ref.var.variable_type.type_string());
                     }
 
-                    let cg_val = self.expression_to_cg(scope, expr.clone());
-
-                    if let Some(cg_val_unwrapped) = cg_val {
-                        self.add_cg_statement_to_scope(scope, CgStatement{statement_type: CgStatementType::VariableAssignment(CgVariableAssignment{assign_value: cg_val_unwrapped, stack_offset: stack_var_ref.local_offset, variable_type: stack_var_ref.var.variable_type})});
-                    } else {
-                        return;
-                    }
+                    self.add_cg_statement_to_scope(scope, CgStatement{statement_type: CgStatementType::VariableAssignment(CgVariableAssignment{assign_value: cg_val, stack_offset: stack_var_ref.local_offset, variable_type: stack_var_ref.var.variable_type})});
                 } else if let Some(function_arg_ref) = self.program_data.get_function_stack_arg_ref(scope, &identifier) {
-                    let init_valid = self.match_var_type_with_expr(&function_arg_ref.var.arg_var_type, &mut expr, scope);
+                    let Some(mut cg_val) = self.expression_to_cg(scope, expr.clone()) else {
+                        error_and_skip!(self, ErrorKind::ExpectedStatement, Statements::ExpressionEmpty.type_string());
+                    };
+
+                    let init_valid = self.validate_cg_expr_with_var(&mut cg_val, &function_arg_ref.var.arg_var_type, scope);
 
                     if !init_valid {
                         error_and_skip!(self, ErrorKind::VariableTypeMismatchExpected, function_arg_ref.var.arg_var_type.type_string());
                     }
 
-                    let cg_val = self.expression_to_cg(scope, expr.clone());
-
-                    if let Some(cg_val_unwrapped) = cg_val {
-                        self.add_cg_statement_to_scope(scope, CgStatement{statement_type: CgStatementType::VariableAssignment(CgVariableAssignment{assign_value: cg_val_unwrapped, stack_offset: function_arg_ref.local_offset, variable_type: function_arg_ref.var.arg_var_type})});
-                    } else {
-                        return;
-                    }
+                    self.add_cg_statement_to_scope(scope, CgStatement{statement_type: CgStatementType::VariableAssignment(CgVariableAssignment{assign_value: cg_val, stack_offset: function_arg_ref.local_offset, variable_type: function_arg_ref.var.arg_var_type})});
                 } else {
                     error_and_skip!(self, ErrorKind::UnknownIdentifier, identifier);
                 }
             },
             Expression::ArrayIndex(arr_index) => {
-                
+                if let Some(stack_var_ref) = self.program_data.get_stack_variable_ref(scope, &arr_index.identifier) {
+                    let Some(mut cg_val) = self.expression_to_cg(scope, expr.clone()) else {
+                        error_and_skip!(self, ErrorKind::ExpectedStatement, Statements::ExpressionEmpty.type_string());
+                    };
+
+                    let VariableType::Array(arr) = stack_var_ref.var.variable_type.clone() else {
+                        error_and_skip!(self, ErrorKind::VariableTypeMismatchExpected, VariableType::ArrayEmpty.type_string());
+                    };
+
+                    let init_valid = self.validate_cg_expr_with_var(&mut cg_val, &arr.variable_type, scope);
+
+                    if !init_valid {
+                        error_and_skip!(self, ErrorKind::VariableTypeMismatchExpected, arr.variable_type.type_string());
+                    }
+
+                    self.add_cg_statement_to_scope(scope, CgStatement{statement_type: CgStatementType::VariableAssignment(CgVariableAssignment{assign_value: cg_val, stack_offset: stack_var_ref.local_offset, variable_type: stack_var_ref.var.variable_type})});
+                } else if let Some(function_arg_ref) = self.program_data.get_function_stack_arg_ref(scope, &arr_index.identifier) {
+                    let Some(mut cg_val) = self.expression_to_cg(scope, expr.clone()) else {
+                        error_and_skip!(self, ErrorKind::ExpectedStatement, Statements::ExpressionEmpty.type_string());
+                    };
+
+                    let VariableType::Array(arr) = function_arg_ref.var.arg_var_type.clone() else {
+                        error_and_skip!(self, ErrorKind::VariableTypeMismatchExpected, VariableType::ArrayEmpty.type_string());
+                    };
+
+                    let init_valid = self.validate_cg_expr_with_var(&mut cg_val, &arr.variable_type, scope);
+
+                    if !init_valid {
+                        error_and_skip!(self, ErrorKind::VariableTypeMismatchExpected, arr.variable_type.type_string());
+                    }
+
+                    self.add_cg_statement_to_scope(scope, CgStatement{statement_type: CgStatementType::VariableAssignment(CgVariableAssignment{assign_value: cg_val, stack_offset: function_arg_ref.local_offset, variable_type: function_arg_ref.var.arg_var_type})});
+                } else {
+                    error_and_skip!(self, ErrorKind::UnknownIdentifier, arr_index.identifier);
+                }
             },
             _ => {
                 error_and_skip!(self, ErrorKind::Unknown);
@@ -322,8 +352,26 @@ impl<'a> SemanticAnaytis<'a> {
         }
     }
 
-    pub fn validate_cg_expr_with_var(&self, cg_expr : &CgExpression, var_type : &VariableType) -> bool {
+    pub fn validate_cg_expr_with_var(&mut self, cg_expr : &mut CgExpression, var_type : &VariableType, scope : usize) -> bool {
         let valid : bool = match (cg_expr, var_type) {
+            (
+                CgExpression::Literal(Literal::Array(arr_literal)),
+                VariableType::Array(arr)
+            ) => {
+                for init_expr in &arr_literal.items {
+                    let Some(mut init_cg_expr) = self.expression_to_cg(scope, init_expr.clone()) else {
+                        return false;
+                    };
+
+                    if self.validate_cg_expr_with_var(&mut init_cg_expr, &*arr.variable_type, scope) == false {
+                        return false;
+                    }
+
+                    arr_literal.cg_items.push(init_cg_expr);
+                };
+
+                true
+            },
             (
                 CgExpression::Literal(Literal::Number(_)),
                 VariableType::I8 | VariableType::I16 | VariableType::I32 | VariableType::I64 |
@@ -334,6 +382,16 @@ impl<'a> SemanticAnaytis<'a> {
                 _
             ) => {
                 stack_var_data.variable_type == *var_type
+            },
+            (
+                CgExpression::Identifier(CgIdentifiers::ArrayVariableData(arr_var_data)),
+                _
+            ) => {
+                let VariableType::Array(arr) = arr_var_data.variable_type.clone() else {
+                    return false;
+                };
+
+                *arr.variable_type == *var_type
             },
             _ => false
         };

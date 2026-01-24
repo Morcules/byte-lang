@@ -687,7 +687,8 @@ impl<'a> Parser<'a> {
 
                         expect_token_with_err!(TokenType::Punctuation(Punctuations::ClosedSquareBracket), self);
 
-                        Some(Expression::ArrayIndex(ArrayIndex{identifier: identifier, index: Box::new(arr_inx), offset: 0}))
+
+                        Some(Expression::ArrayIndex(ArrayIndex{identifier: identifier, index: Box::new(arr_inx)}))
                     },
                     _ => {
                         Some(Expression::Identifier(Identifiers::Identifier(identifier)))
