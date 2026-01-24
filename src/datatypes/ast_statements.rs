@@ -197,7 +197,6 @@ pub struct VariableDeclaration {
 pub struct ArrayIndex {
     pub identifier : String,
     pub index : Box<Expression>,
-    pub offset : usize
 }
 
 #[derive(Debug, PartialEq, Clone)]

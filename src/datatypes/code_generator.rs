@@ -76,6 +76,10 @@ impl<'a> CodeGenerator<'a> {
                 self.push_compiled_code_to_label(label, &result);
             },
             CgStatementType::VariableAssignment(var_init) => {
+                // CHANGE OFFSET IN VAR ASSIGNMENT TO EXPR TO HANDLE ARR
+                if let VariableType::Array(arr) var_init.stack_offset = {
+                    
+                }
                 let compiled_code = &self.init_var(var_init.stack_offset, var_init.variable_type.clone(), var_init.assign_value);
 
                 self.push_compiled_code_to_label(label, compiled_code);
@@ -151,6 +155,8 @@ impl<'a> CodeGenerator<'a> {
     }
 
     pub fn init_var(&mut self, target_offset : usize, variable_type : VariableType, expression : CgExpression) -> String {
+        println!("{:?}{:?}\n", variable_type, expression);
+
         match (variable_type.clone(), expression.clone()) {
             (
                 _,
@@ -160,9 +166,21 @@ impl<'a> CodeGenerator<'a> {
             },
             (
                 _,
+                CgExpression::Identifier(CgIdentifiers::ArrayVariableData(array_var_data))
+            ) => {
+                return format!("{}{}", 
+                    self.expr_to_temp_reg(&expression, TempRegisters::T0),
+                    store_reg_to_stack(&temp_reg_for_type(variable_type.clone(), false, TempRegisters::T0), target_offset, variable_type)
+                )
+            },
+            (
+                _,
                 CgExpression::Identifier(CgIdentifiers::StackVariableData(stack_var_data))
             ) => {
-                return String::from(format!("{}{}", variable_to_reg(&temp_reg_for_type(variable_type.clone(), true, TempRegisters::T0), stack_var_data.offset, variable_type.clone()), store_reg_to_stack(&temp_reg_for_type(variable_type.clone(), false, TempRegisters::T0), target_offset, variable_type)));
+                return format!("{}{}", 
+                    self.expr_to_temp_reg(&expression, TempRegisters::T0),
+                    store_reg_to_stack(&temp_reg_for_type(variable_type.clone(), false, TempRegisters::T0), target_offset, variable_type)
+                )
             },
             (
                 VariableType::Array(arr),
@@ -223,7 +241,21 @@ impl<'a> CodeGenerator<'a> {
                     );
                 };
 
-                return String::new();
+                let arr_index_ptr = temp_reg_for_type(VariableType::I64, false, TempRegisters::T0);
+                let arr_start_ptr = temp_reg_for_type(VariableType::I64, false, TempRegisters::T1);
+                let result_ptr= temp_reg_for_type(*arr.variable_type.clone(), true, temp_reg);
+
+                return format!(
+                    "{}add {}, sp, #{}\n{} {}, [{}, {}, lsl #{}]\n", 
+                    self.expr_to_temp_reg(&arr_var_data.arr_index, TempRegisters::T0),
+                    arr_start_ptr,
+                    arr_var_data.offset,
+                    load_instruction_for_type(*arr.variable_type.clone()),
+                    result_ptr,
+                    arr_start_ptr,
+                    arr_index_ptr,
+                    arr.variable_type.get_variable_size()
+                );
             },
             _ => todo!()
         }
