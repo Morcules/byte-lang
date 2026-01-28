@@ -35,6 +35,30 @@ impl<'a> Tokenizer<'a> {
             };
         }
     }
+
+    pub fn parse_char(&mut self) -> char {
+        return match self.current_char() {
+            '\\' => {
+                self.advance(1);
+                let new_char = match self.current_char() {
+                    'n' => '\n',
+                    '\\' => '\\',
+                    _ => ' '
+                };
+
+                self.advance(1);
+
+                new_char
+            },
+            _ => {
+                let cur = self.current_char();
+
+                self.advance(1);
+
+                return cur;
+            }
+        }
+    }
     
     pub fn next_token(&mut self) -> Option<Token> {
         self.skip_whitespace();
@@ -72,11 +96,9 @@ impl<'a> Tokenizer<'a> {
             '\'' => {
                 self.advance(1);
 
-                let char = self.current_char();
+                let char = self.parse_char();
 
                 let literal_res = char as u8;
-
-                self.advance(1);
 
                 if self.current_char() != '\'' {
                     panic!()
@@ -96,21 +118,8 @@ impl<'a> Tokenizer<'a> {
                         '"' => {
                             break;
                         },
-                        '\\' => {
-                            self.advance(1);
-                            let new_char = match self.current_char() {
-                                'n' => '\n',
-                                '\\' => '\\',
-                                _ => ' '
-                            };
-
-                            str.push(new_char);
-
-                            self.advance(1);
-                        },
                         _ => {
-                            str.push(self.current_char());
-                            self.advance(1);
+                            str.push(self.parse_char());
                         }
                     }
                 };

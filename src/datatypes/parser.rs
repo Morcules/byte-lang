@@ -620,6 +620,23 @@ impl<'a> Parser<'a> {
         self.position += 1;
     }
 
+    pub fn parse_array_init_string(&mut self) -> Option<Expression> {
+        let TokenType::Literal(Literal::String(string)) = self.current_token().kind else {
+            error_and_skip!(self, ErrorKind::ExpectedToken, TokenType::Literal(Literal::StringEmpty).type_string());
+        };
+
+        self.advance_position();
+
+        let mut result = ArrayLiteral{items: Vec::new(), cg_items: Vec::new()};
+
+        for char in string.chars() {
+            result.items.push(Expression::Literal(Literal::Number(char as i64)));
+        }
+
+        return Some(Expression::Literal(Literal::Array(result)));
+
+    }
+
     pub fn parse_array_init(&mut self) -> Option<Expression> {
         expect_token_with_err!(TokenType::Punctuation(Punctuations::OpenSquareBracket), self);
 
@@ -661,11 +678,12 @@ impl<'a> Parser<'a> {
     pub fn parse_expr(&mut self) -> Option<Expression> {
         let result : Option<Expression> = match self.current_token().kind {
             TokenType::Literal(literal) => {
-                self.advance_position();
-
                 match literal {
-                    Literal::String(string_val) => Some(Expression::Literal(Literal::String(string_val))),
-                    Literal::Number(num_val) => Some(Expression::Literal(Literal::Number(num_val))),
+                    Literal::String(string_val) => self.parse_array_init_string(),
+                    Literal::Number(num_val) => {
+                        self.advance_position();
+                        Some(Expression::Literal(Literal::Number(num_val)))
+                    },
                     _ => None
                 }
             },
