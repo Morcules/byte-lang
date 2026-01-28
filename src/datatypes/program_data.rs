@@ -33,6 +33,10 @@ impl ProgramData {
         return self.scopes.get(index).unwrap();
     }
 
+    pub fn get_scope_by_index_mut(&mut self, index : usize) -> &'_ mut Scope {
+        return self.scopes.get_mut(index).unwrap();
+    }
+
     pub fn get_stack_variable_ref(&mut self, scope : usize, var_name : &str) -> Option<StackVariableRef> {
         let scope = self.get_scope_by_index(scope);
 

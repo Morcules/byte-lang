@@ -1,26 +1,6 @@
 .global _main
 .align 16
 .text
-_test:
-str x30, [sp, #-16]!
-sub sp, sp, #16
-mov x10, #15
-str x10, [sp, #40]
-ldr x10, [sp, #40]
-str x10, [sp, #8]
-add sp, sp, #16
-ldr x30, [sp], #16
-ret
-
-_3:
-ldr x10, [sp, #72]
-str x10, [sp, #6]
-mov x10, #10
-str x10, [sp, #6]
-mov x0, #0
-bl _term
-b _main_1
-
 _main:
 str x30, [sp, #-16]!
 sub sp, sp, #80
@@ -98,4 +78,24 @@ svc #0x80
 add sp, sp, #16
 ldr x30, [sp], #16
 ret
+
+_test:
+str x30, [sp, #-16]!
+sub sp, sp, #16
+mov x10, #15
+str x10, [sp, #40]
+ldr x10, [sp, #40]
+str x10, [sp, #8]
+add sp, sp, #16
+ldr x30, [sp], #16
+ret
+
+_3:
+ldr x10, [sp, #72]
+str x10, [sp, #6]
+mov x10, #10
+str x10, [sp, #6]
+mov x0, #0
+bl _term
+b _main_1
 

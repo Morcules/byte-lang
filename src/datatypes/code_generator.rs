@@ -306,13 +306,13 @@ impl<'a> CodeGenerator<'a> {
     }
 
     pub fn process_scope(&mut self, scope : usize, label: &str) -> () {
-        let scope_parent = self.get_scope_by_index(scope).parent.clone();
+        let scope_parent = self.program_data.get_scope_by_index(scope).parent.clone();
 
         if scope_parent == usize::MAX {
             self.initialize_scope(label, scope);
         }
 
-        for statement in self.get_scope_by_index(scope).cg_statements.clone().iter() {
+        for statement in self.program_data.get_scope_by_index(scope).cg_statements.clone().iter() {
             self.process_statement(statement, label, scope);
         }
 
@@ -354,7 +354,7 @@ impl<'a> CodeGenerator<'a> {
     }
 
     pub fn traverse_scope_children(&mut self, scope_index : usize, label: &str) -> () {
-        let children = self.get_scope_by_index(scope_index).children.clone();
+        let children = self.program_data.get_scope_by_index(scope_index).children.clone();
 
         self.process_scope(scope_index, label);
 
@@ -363,13 +363,5 @@ impl<'a> CodeGenerator<'a> {
 
             self.traverse_scope_children(child.clone(), &child.to_string());
         }
-    }
-
-    pub fn get_scope_by_index(&self, index : usize) -> &'_ Scope {
-        return self.program_data.scopes.get(index).unwrap();
-    }
-
-    pub fn get_scope_by_index_mut(&mut self, index : usize) -> &'_ mut Scope {
-        return self.program_data.scopes.get_mut(index).unwrap();
     }
 }
