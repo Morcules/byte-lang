@@ -9,15 +9,24 @@ pub mod asm {
     pub enum TempRegisters {
         T0,
         T1,
-        T2
+        T2,
+        T3,
+        T4,
+        T5
     }
 
     pub fn temp_reg_for_type(var_type : VariableType, load_instruction : bool, reg : TempRegisters) -> String {
         let temp_registers : [&str; 2] = {
             match reg {
+                // Operation registers
                 TempRegisters::T0 => ["x10", "w10"],
                 TempRegisters::T1 => ["x11", "w11"],
-                TempRegisters::T2 => ["x12", "w12"]
+                TempRegisters::T2 => ["x12", "w12"],
+                // Long lived reg
+                TempRegisters::T3 => ["x13", "w13"],
+                TempRegisters::T4 => ["x14", "w14"],
+                TempRegisters::T5 => ["x15", "w15"],
+
             }
         };
 

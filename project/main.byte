@@ -39,9 +39,9 @@ void : main() {
             bl(term, 0);
         }
         .eq {
-            array[u64, 4] arr = [1, 2, 3, test];
+            array[u8, 4] arr = [1, 2, 3, char];
 
-            arr[0] = 0;
+            arr[var3] = 0;
 
             bl(term, 1);
         }
