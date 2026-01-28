@@ -1,6 +1,6 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::format};
 
-use crate::datatypes::{assembly_instructions::asm::*, ast_statements::{CgBuiltInFunctions, CgExpression, CgIdentifiers, CgStatement, CgStatementType, CmpConditionType, Literal, MemoryLocationsAst, VariableType}, program_data::ProgramData, scope::Scope};
+use crate::datatypes::{assembly_instructions::asm::*, ast_statements::{CgBuiltInFunctions, CgExpression, CgIdentifiers, CgStatement, CgStatementType, CgVariableAssignmentType, CmpConditionType, Literal, MemoryLocationsAst, VariableType}, program_data::ProgramData, scope::Scope};
 
 pub struct CodeGenerator<'a> {
     program_data: &'a mut ProgramData,
@@ -77,10 +77,7 @@ impl<'a> CodeGenerator<'a> {
             },
             CgStatementType::VariableAssignment(var_init) => {
                 // CHANGE OFFSET IN VAR ASSIGNMENT TO EXPR TO HANDLE ARR
-                if let VariableType::Array(arr) var_init.stack_offset = {
-                    
-                }
-                let compiled_code = &self.init_var(var_init.stack_offset, var_init.variable_type.clone(), var_init.assign_value);
+                let compiled_code = &self.init_var(var_init.assign_type, var_init.variable_type.clone(), var_init.assign_value);
 
                 self.push_compiled_code_to_label(label, compiled_code);
             },
@@ -129,7 +126,7 @@ impl<'a> CodeGenerator<'a> {
 
                                             stack_var_data_clone.offset += function_stack_args_mem_allocated;
 
-                                            result.push_str(&self.init_var(function_stack_args_mem_allocated - stack_arg_offset - var_size, stack_var_data_clone.variable_type.clone(), CgExpression::Identifier(CgIdentifiers::StackVariableData(stack_var_data_clone))));
+                                            result.push_str(&self.init_var(CgVariableAssignmentType::CompileTimeStackOffset(function_stack_args_mem_allocated - stack_arg_offset - var_size), stack_var_data_clone.variable_type.clone(), CgExpression::Identifier(CgIdentifiers::StackVariableData(stack_var_data_clone))));
                                         },
                                         _ => unreachable!()
                                     }
@@ -154,55 +151,88 @@ impl<'a> CodeGenerator<'a> {
         };
     }
 
-    pub fn init_var(&mut self, target_offset : usize, variable_type : VariableType, expression : CgExpression) -> String {
+    pub fn init_var(&mut self, assign_type : CgVariableAssignmentType, variable_type : VariableType, expression : CgExpression) -> String {
         println!("{:?}{:?}\n", variable_type, expression);
 
-        match (variable_type.clone(), expression.clone()) {
-            (
-                _,
-                CgExpression::Literal(Literal::Number(num))
-            ) => {
-                return String::from(store_literal_to_stack(variable_type, num, target_offset));
-            },
-            (
-                _,
-                CgExpression::Identifier(CgIdentifiers::ArrayVariableData(array_var_data))
-            ) => {
-                return format!("{}{}", 
-                    self.expr_to_temp_reg(&expression, TempRegisters::T0),
-                    store_reg_to_stack(&temp_reg_for_type(variable_type.clone(), false, TempRegisters::T0), target_offset, variable_type)
-                )
-            },
-            (
-                _,
-                CgExpression::Identifier(CgIdentifiers::StackVariableData(stack_var_data))
-            ) => {
-                return format!("{}{}", 
-                    self.expr_to_temp_reg(&expression, TempRegisters::T0),
-                    store_reg_to_stack(&temp_reg_for_type(variable_type.clone(), false, TempRegisters::T0), target_offset, variable_type)
-                )
-            },
-            (
-                VariableType::Array(arr),
-                CgExpression::Literal(Literal::Array(arr_expr))
-            ) => {
-                let mut res = String::new();
+        match assign_type {
+            CgVariableAssignmentType::ArrayItem(arr_item) => {
+                match &*arr_item.arr_index {
+                    CgExpression::Literal(Literal::Number(num)) => {
+                        return self.init_var(CgVariableAssignmentType::CompileTimeStackOffset(arr_item.offset + (num.clone() as usize * arr_item.variable_type.get_variable_size())), arr_item.variable_type, expression);
+                    },
+                    CgExpression::Identifier(CgIdentifiers::StackVariableData(stack_var_data)) => {
+                        let mut res = String::new(); 
+                        res.push_str(&self.expr_to_temp_reg(&arr_item.arr_index, TempRegisters::T4));
+                        res.push_str(&self.expr_to_temp_reg(&expression, TempRegisters::T5));
 
-                let mut i = 0;
+                        let assign_value_reg = temp_reg_for_type(arr_item.variable_type.clone(), false, TempRegisters::T5);
+                        let index_reg = temp_reg_for_type(VariableType::I64, false, TempRegisters::T4);
+                        let arr_ptr_reg = temp_reg_for_type(VariableType::I64, false, TempRegisters::T1);
 
-                let item_size = arr.variable_type.get_variable_size();
+                        res.push_str(
+                            &format!("add {}, sp, #{}\n{} {}, {}\n",
+                                arr_ptr_reg,
+                                arr_item.offset,
+                                store_instruction_for_type(arr_item.variable_type.clone()),
+                                assign_value_reg,
+                                self.ptr_lsl_operation(arr_item.variable_type.get_variable_size(), &arr_ptr_reg, &index_reg),
+                            )
+                        );
 
-                for item in arr_expr.cg_items {
-                    let init_code = self.init_var((i * item_size) + target_offset, *arr.variable_type.clone(), item);
-
-                    res.push_str(&init_code);
-
-                    i += 1;
+                        return res;
+                    },
+                    _ => todo!()
                 }
-
-                return res;
             },
-            _ => unreachable!()
+            CgVariableAssignmentType::CompileTimeStackOffset(target_offset) => {
+                match (variable_type.clone(), expression.clone()) {
+                    (
+                        _,
+                        CgExpression::Literal(Literal::Number(num))
+                    ) => {
+                        return String::from(store_literal_to_stack(variable_type, num, target_offset));
+                    },
+                    (
+                        _,
+                        CgExpression::Identifier(CgIdentifiers::ArrayVariableData(array_var_data))
+                    ) => {
+                        return format!("{}{}", 
+                            self.expr_to_temp_reg(&expression, TempRegisters::T0),
+                            store_reg_to_stack(&temp_reg_for_type(variable_type.clone(), false, TempRegisters::T0), target_offset, variable_type)
+                        )
+                    },
+                    (
+                        _,
+                        CgExpression::Identifier(CgIdentifiers::StackVariableData(stack_var_data))
+                    ) => {
+                        return format!("{}{}", 
+                            self.expr_to_temp_reg(&expression, TempRegisters::T0),
+                            store_reg_to_stack(&temp_reg_for_type(variable_type.clone(), false, TempRegisters::T0), target_offset, variable_type)
+                        )
+                    },
+                    (
+                        VariableType::Array(arr),
+                        CgExpression::Literal(Literal::Array(arr_expr))
+                    ) => {
+                        let mut res = String::new();
+
+                        let mut i = 0;
+
+                        let item_size = arr.variable_type.get_variable_size();
+
+                        for item in arr_expr.cg_items {
+                            let init_code = self.init_var(CgVariableAssignmentType::CompileTimeStackOffset((i * item_size) + target_offset), *arr.variable_type.clone(), item);
+
+                            res.push_str(&init_code);
+
+                            i += 1;
+                        }
+
+                        return res;
+                    },
+                    _ => unreachable!()
+                }
+            }
         }
     }
 
@@ -219,6 +249,16 @@ impl<'a> CodeGenerator<'a> {
         self.push_compiled_code_to_label(label, &destroy_scope(mem));
 
         return;
+    }
+
+    pub fn ptr_lsl_operation(&mut  self, variable_size : usize, ptr : &str, value_reg : &str) -> String {
+        return match variable_size {
+            1 => format!("[{}, {}]", ptr, value_reg),
+            2 => format!("[{}, {}, lsl #1]", ptr, value_reg),
+            4 => format!("[{}, {}, lsl #2]", ptr, value_reg),
+            8 => format!("[{}, {}, lsl #3]", ptr, value_reg),
+            _ => unreachable!()
+        }
     }
 
     pub fn expr_to_temp_reg(&mut self, expr : &CgExpression, temp_reg : TempRegisters) -> String {
@@ -241,21 +281,21 @@ impl<'a> CodeGenerator<'a> {
                     );
                 };
 
-                let arr_index_ptr = temp_reg_for_type(VariableType::I64, false, TempRegisters::T0);
+                let arr_index_ptr = temp_reg_for_type(VariableType::I64, false, TempRegisters::T3);
                 let arr_start_ptr = temp_reg_for_type(VariableType::I64, false, TempRegisters::T1);
-                let result_ptr= temp_reg_for_type(*arr.variable_type.clone(), true, temp_reg);
+                let result_ptr = temp_reg_for_type(*arr.variable_type.clone(), true, temp_reg);
 
-                return format!(
-                    "{}add {}, sp, #{}\n{} {}, [{}, {}, lsl #{}]\n", 
-                    self.expr_to_temp_reg(&arr_var_data.arr_index, TempRegisters::T0),
+                let str_code : String = format!(
+                    "{}add {}, sp, #{}\n{} {}, {}\n", 
+                    self.expr_to_temp_reg(&arr_var_data.arr_index, TempRegisters::T3),
                     arr_start_ptr,
                     arr_var_data.offset,
                     load_instruction_for_type(*arr.variable_type.clone()),
                     result_ptr,
-                    arr_start_ptr,
-                    arr_index_ptr,
-                    arr.variable_type.get_variable_size()
+                    self.ptr_lsl_operation(arr.variable_type.get_variable_size().clone(), &arr_start_ptr, &arr_index_ptr)
                 );
+
+                return str_code;
             },
             _ => todo!()
         }

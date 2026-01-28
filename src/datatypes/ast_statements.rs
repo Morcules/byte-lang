@@ -356,8 +356,14 @@ pub struct ArrayVariableData {
 #[derive(Debug, PartialEq, Clone)]
 pub struct CgVariableAssignment {
     pub assign_value : CgExpression,
-    pub stack_offset : usize,
+    pub assign_type : CgVariableAssignmentType,
     pub variable_type : VariableType
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum CgVariableAssignmentType {
+    CompileTimeStackOffset(usize),
+    ArrayItem(ArrayVariableData)
 }
 
 #[derive(Debug, PartialEq, Clone)]
