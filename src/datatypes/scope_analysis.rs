@@ -107,7 +107,7 @@ impl<'a> ScopeAnalysis<'a> {
         let new_scope_index = self.program_data.scopes.len();
 
         let parent = self.scope_stack.last().unwrap().clone();
-        let function_name = self.get_scope_by_index(parent.clone()).function.clone();
+        let function_name = self.program_data.get_scope_by_index(parent.clone()).function.clone();
 
         self.program_data.scopes.push(Scope::new(parent, function_name));
 
@@ -132,15 +132,11 @@ impl<'a> ScopeAnalysis<'a> {
         return;
     }
 
-    pub fn get_scope_by_index(&mut self, scope : usize) -> &'_ Scope {
-        return self.program_data.scopes.get(scope).unwrap();
-    }
-
     pub fn check_if_var_exists(&mut self, var : &VariableDeclaration) -> bool {
         let mut current_scope_index : usize = self.get_current_scope_index();
 
         while current_scope_index != usize::MAX {
-            let scope_borrow = self.get_scope_by_index(current_scope_index);
+            let scope_borrow = self.program_data.get_scope_by_index(current_scope_index);
 
             if let Some(_) = scope_borrow.variables.get(&var.name) {
                 return true;

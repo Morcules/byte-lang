@@ -70,7 +70,7 @@ impl<'a> SemanticAnaytis<'a> {
                     }
                 }
 
-                let scope_borrow = self.get_scope_by_index(scope);
+                let scope_borrow = self.program_data.get_scope_by_index(scope);
                 let func_name = if scope_borrow.parent == usize::MAX {scope_borrow.function.clone()} else {scope.to_string()};
                 let label_num = self.get_random_label_num();
                 let branch_name = format!("{}_{}", func_name, label_num);
@@ -186,7 +186,7 @@ impl<'a> SemanticAnaytis<'a> {
     }
 
     pub fn process_scope(&mut self, scope : usize) -> () {
-        for statement in self.get_scope_by_index(scope).statements.clone().iter() {
+        for statement in self.program_data.get_scope_by_index(scope).statements.clone().iter() {
             self.process_statement(statement, scope);
         }
 
@@ -204,7 +204,7 @@ impl<'a> SemanticAnaytis<'a> {
     }
 
     pub fn get_stack_variable(&self, scope : usize, variable_name : &str) -> Option<StackVariable> {
-        let scope_borrow = self.get_scope_by_index(scope);
+        let scope_borrow = self.program_data.get_scope_by_index(scope);
 
         if let Some(var) = scope_borrow.variables.get(variable_name) {
             return Some(var.clone());
@@ -218,11 +218,11 @@ impl<'a> SemanticAnaytis<'a> {
     }
 
     pub fn add_cg_statement_to_scope(&mut self, scope : usize, statement : CgStatement) -> () {
-        self.get_scope_by_index_mut(scope).cg_statements.push(statement);
+        self.program_data.get_scope_by_index_mut(scope).cg_statements.push(statement);
     }
 
     pub fn traverse_scope_children(&mut self, scope_index : usize) -> () {
-        let children = self.get_scope_by_index(scope_index).children.clone();
+        let children = self.program_data.get_scope_by_index(scope_index).children.clone();
 
         for child in children.iter() {
             self.traverse_scope_children(child.clone());
@@ -418,14 +418,6 @@ impl<'a> SemanticAnaytis<'a> {
     }
 
     pub fn borrow_stack_variable_with_scope_index(&self, scope : usize, variable_name : String) -> Option<&'_ StackVariable> {
-        return self.get_scope_by_index(scope).variables.get(&variable_name);
-    }
-
-    pub fn get_scope_by_index(&self, index : usize) -> &'_ Scope {
-        return self.program_data.scopes.get(index).unwrap();
-    }
-    
-    pub fn get_scope_by_index_mut(&mut self, index : usize) -> &'_ mut Scope {
-        return self.program_data.scopes.get_mut(index).unwrap();
+        return self.program_data.get_scope_by_index(scope).variables.get(&variable_name);
     }
 }
