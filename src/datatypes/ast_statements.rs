@@ -203,6 +203,7 @@ pub enum Expression {
     ArrayIndex(ArrayIndex),
     Literal(Literal),
     Identifier(Identifiers),
+    Register(String),
     BuiltInFunction(BuiltInFunctionsAst)
 }
 
@@ -362,7 +363,8 @@ pub struct CgVariableAssignment {
 #[derive(Debug, PartialEq, Clone)]
 pub enum CgVariableAssignmentType {
     CompileTimeStackOffset(usize),
-    ArrayItem(ArrayVariableData)
+    ArrayItem(ArrayVariableData),
+    Register(String)
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -488,6 +490,9 @@ impl Expression {
         let str : &str = match self {
             Expression::ArrayIndex(array_index) => {
                 &format!("ArrayIndex[{}]", array_index.index.type_string())
+            },
+            Expression::Register(register) => {
+                &format!("Register[{}]", register)
             },
             Expression::Literal(literal) => &literal.type_string(),
             Expression::Identifier(identifier) => &identifier.type_string(),

@@ -545,6 +545,38 @@ impl<'a> Parser<'a> {
                     }
                 };
             },
+            TokenType::MemoryLocation(MemoryLocations::Register) => {
+                self.advance_position();
+
+                expect_token_with_err!(TokenType::Punctuation(Punctuations::OpenSquareBracket), self);
+
+                let TokenType::Identifier(Identifiers::Identifier(register)) = self.current_token().kind else {
+                    let current_tkn_type_string = self.current_token().kind.type_string();
+
+                    error_and_skip!(self, ErrorKind::InvalidToken, TokenType::IdentifierEmpty.type_string(), current_tkn_type_string);
+                };
+
+                self.advance_position();
+
+                expect_token_with_err!(TokenType::Punctuation(Punctuations::ClosedSquareBracket), self);
+
+                match self.current_token().kind {
+                    TokenType::Operator(Operators::Assignment) => {
+                        self.advance_position();
+
+                        let Some(value_expr) = self.parse_expr() else {
+                            error_and_skip!(self, ErrorKind::ExpectedStatement, Statements::ExpressionEmpty.type_string());
+                        };
+
+                        expect_token_with_err!(TokenType::Punctuation(Punctuations::Semicolon), self);
+
+                        return Some(Statement::new(&token, self.current_token().start_pos, Statements::Assignment(Assignment{identifier: Expression::Register(register), value: value_expr})))
+                    },
+                    _ => {
+                        error_and_skip!(self, ErrorKind::Unknown);
+                    }
+                };
+            },
             TokenType::BuiltInFunction(BuiltInFunctions::BranchLinked) => {
                 self.advance_position();
 
