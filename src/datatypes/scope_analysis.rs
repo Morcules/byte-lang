@@ -51,8 +51,6 @@ impl<'a> ScopeAnalysis<'a> {
             self.pop_scope();
 
             return;
-        } else if statement.statement_type == Statements::EOF {
-            return;
         }
 
         match &mut statement.statement_type {
@@ -86,15 +84,11 @@ impl<'a> ScopeAnalysis<'a> {
     }
 
     pub fn process_all(&mut self) -> () {
-        loop {
+        while self.position < self.program_data.statements.len() {
             let mut current_statement = self.current_statement().clone();
 
             print!(" {:?} ", current_statement);
             
-            if current_statement.statement_type == Statements::EOF {
-                break;
-            }
-
             self.process_statement(&mut current_statement);
             
             self.advance_position();

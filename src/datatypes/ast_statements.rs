@@ -63,7 +63,6 @@ pub struct Assignment {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Statements {
-    EOF,
     Assignment(Assignment),
     VariableDeclaration(VariableDeclaration),
     FunctionDeclaration(FunctionDeclaration),
@@ -447,7 +446,6 @@ impl VariableType {
 impl Statements {
     pub fn type_string(&self) -> String {
         let str : &str = match self {
-            Statements::EOF => "EOF",
             Statements::Assignment(_) => "Variable assignment",
             Statements::VariableDeclaration(_) => "Variable declaration",
             Statements::FunctionDeclaration(_) => "Function declaration",

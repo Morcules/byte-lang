@@ -1,3 +1,8 @@
+use std::fmt::format;
+use std::fs::{self, File};
+use std::io::Read;
+use std::path::Path;
+
 use crate::datatypes::ast_statements::{ArrayIndex, ArrayLiteral, ArrayType, Assignment, BranchLinkedAst, BuiltInFunctionsAst, CmpCondition, Compare, Expression, Format, FunctionArg, FunctionDeclaration, Literal, MemoryLocationsAst, Statement, Statements, VariableDeclaration, VariableType};
 use crate::datatypes::errors::ErrorKind;
 use crate::datatypes::general_functions::align_memory;
@@ -30,27 +35,20 @@ macro_rules! error_and_skip {
 
 pub struct Parser<'a> {
     program_data: &'a mut ProgramData,
-    position: usize
+    position: usize,
+    file_name: String
 }
 
 impl<'a> Parser<'a> {
-    pub fn new(program_data: &'a mut ProgramData) -> Self {
-        return Self{program_data, position: 0};
+    pub fn new(program_data: &'a mut ProgramData, file_name: &str) -> Self {
+        return Self{program_data, position: 0, file_name: String::from(file_name)};
     }
 
     pub fn parse_all(&mut self) -> () {
-        loop {
+        while self.position < self.program_data.tokens.len() {
             match self.parse_next() {
                 Some(statement) => {
-                    let eof = statement.statement_type == Statements::EOF;
-
-                    print!("{:?}", statement);
-
                     self.program_data.statements.push(statement);
-
-                    if eof {
-                        break;
-                    }
                 },
                 None => {
                     continue;
@@ -223,7 +221,7 @@ impl<'a> Parser<'a> {
 
         let body : Vec<Statement> = self.parse_braces_body();
 
-        return Some(Statement::new(first_token, self.current_token().end_pos, Statements::FunctionDeclaration(FunctionDeclaration{
+        return Some(Statement::new(first_token, self.position - 1, Statements::FunctionDeclaration(FunctionDeclaration{
             args,
             name : func_name,
             return_type: func_return_type,
@@ -287,9 +285,6 @@ impl<'a> Parser<'a> {
         let token = self.current_token();
 
         match token.kind.clone() {
-            TokenType::EOF => {
-                return Some(Statement::new(&token, token.end_pos, Statements::EOF));
-            },
             TokenType::BuiltInFunction(BuiltInFunctions::Format) => {
                 return self.parse_format_built_in_function(&token);
             },
@@ -505,6 +500,50 @@ impl<'a> Parser<'a> {
                 }
 
                 return Some(Statement::new(&token, end_pos, Statements::Compare(Compare{conditions: conditions, expressions: [first_expr_unwrapped, second_expr_unwrapped]})))
+            },
+            TokenType::Punctuation(Punctuations::Hashtag) => {
+                self.advance_position();
+
+                let TokenType::Identifier(Identifiers::Identifier(directive)) = self.current_token().kind else {
+                    error_and_skip!(self, ErrorKind::Unknown);
+                };
+
+                self.advance_position();
+
+                match directive.as_str() {
+                    "import" => {
+                        let TokenType::Literal(Literal::String(file_location)) = self.current_token().kind else {
+                            error_and_skip!(self, ErrorKind::ExpectedToken, TokenType::IdentifierEmpty.type_string());
+                        };
+
+                        self.advance_position();
+                        
+                        expect_token_with_err!(TokenType::Punctuation(Punctuations::Semicolon), self);
+
+                        let current_file = Path::new(&self.file_name);
+
+                        let parent_dir = current_file.parent().expect("Current file has no parent directory");
+
+                        let abs_path = parent_dir.join(file_location);
+
+                        let abs_path = fs::canonicalize(&abs_path).expect("File does not exist");
+
+                        println!("Absolute path: {}", abs_path.display());
+
+                        let abs_path = abs_path.to_str().unwrap();
+
+                        self.program_data.source_codes.insert(String::from(abs_path), String::new());
+
+                        let mut file = File::open(abs_path).expect("Error Oppening File");
+
+                        file.read_to_string(self.program_data.source_codes.get_mut(abs_path).unwrap()).unwrap();
+
+                        return None;
+                    },
+                    _ => {
+                        error_and_skip!(self, ErrorKind::Unknown);
+                    }
+                };
             },
             TokenType::BuiltInFunction(BuiltInFunctions::BranchLinked) => {
                 self.advance_position();

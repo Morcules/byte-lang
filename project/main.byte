@@ -1,9 +1,6 @@
 // Just an example that does literally nothing just for testing //
-void : term(i64 exit_code : [reg(x0)]) {
-    i32 var = 10;
 
-    asm(format("mov x1, #{}\nmov x16, #1\nsvc #0x80\n", stack_offset(var)));
-}
+#import "../std-lib/general_syscall_functions.byte";
 
 void : test(i64 test_var : [stack], i64 test_var_two : [stack]) {
     test_var = 15;

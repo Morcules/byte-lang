@@ -6,34 +6,39 @@ pub struct Tokenizer<'a> {
     position: usize,
     col: usize,
     line: usize,
+    source_code: String
 }
 
 impl<'a> Tokenizer<'a> {
     // Initialize the tokenizer.
     pub fn new(program_data: &'a mut ProgramData) -> Self {
-        Self {program_data, position: 0, col: 1, line: 1}
+        Self {program_data, position: 0, col: 1, line: 1, source_code: String::new()}
+    }
+
+    pub fn set_new_target(&mut self, source_code : &str) -> () {
+        self.source_code = String::from(source_code);
+        self.col = 1;
+        self.position = 0;
+        self.line = 1;
     }
 
     pub fn tokenize_all(&mut self) -> () {
-        loop {
+        while self.position < self.source_code_len() {
             let token = self.next_token();
 
             match token {
                 Some(tkn) => {
                     print!(" {:?} ", tkn);
 
-                    let eof = tkn.kind == TokenType::EOF;
-
                     self.program_data.tokens.push(tkn);
-
-                    if eof {
-                        print!("\n");
-                        return;
-                    }
                 },
                 None => {}
             };
         }
+
+        print!("\n");
+
+        return;
     }
 
     pub fn parse_char(&mut self) -> char {
@@ -63,8 +68,8 @@ impl<'a> Tokenizer<'a> {
     pub fn next_token(&mut self) -> Option<Token> {
         self.skip_whitespace();
 
-        if self.program_data.source_code.len() <= self.position {
-            return Some(Token{kind: TokenType::EOF, col: self.col, line: self.line, start_pos: self.position, end_pos: self.position});
+        if self.source_code_len() <= self.position {
+            return None;
         }
 
         let mut res = String::new();
@@ -72,7 +77,7 @@ impl<'a> Tokenizer<'a> {
         let start_pos = self.position;
 
         match self.current_char() {
-            '\n' | ';' | '(' | ')' | ',' | '[' | ']' | '{' | '}' | '.' => {
+            '\n' | ';' | '(' | ')' | ',' | '[' | ']' | '{' | '}' | '.' | '#' => {
                 res = String::from(self.current_char());
                 self.advance(1);
             },
@@ -113,7 +118,7 @@ impl<'a> Tokenizer<'a> {
 
                 self.advance(1);
 
-                while self.position < self.program_data.source_code.len() && self.current_char() != '"' {
+                while self.position < self.source_code_len() && self.current_char() != '"' {
                     match self.current_char() {
                         '"' => {
                             break;
@@ -129,14 +134,14 @@ impl<'a> Tokenizer<'a> {
                 return Some(Token{kind: TokenType::Literal(Literal::String(str)), col: self.col, line: self.line, start_pos, end_pos: self.position});
             },
             _ => {
-                while self.position < self.program_data.source_code.len() && self.current_char().is_whitespace() == false && matches!(self.current_char(), ';' | '(' | ')' | ',' | '[' | ']' | '{' | '}') == false {
+                while self.position < self.source_code_len() && self.current_char().is_whitespace() == false && matches!(self.current_char(), ';' | '(' | ')' | ',' | '[' | ']' | '{' | '}' | '#') == false {
                     res.push(self.current_char());
                     self.advance(1);
                 };
             }
         }
 
-        let token_default = Token{kind: TokenType::EOF, col: self.col, line: self.line, start_pos, end_pos: self.position};
+        let token_default = Token{kind: TokenType::KeywordEmpty, col: self.col, line: self.line, start_pos, end_pos: self.position};
 
         match &res as &str {
             "\n" => {
@@ -145,7 +150,10 @@ impl<'a> Tokenizer<'a> {
             },
             "stack_offset" => {
                 return Some(Token{kind: TokenType::BuiltInFunction(BuiltInFunctions::StackOffset), ..token_default});
-            }
+            },
+            "#" => {
+                return Some(Token{kind: TokenType::Punctuation(Punctuations::Hashtag), ..token_default});
+            },
             ";" => {
                 return Some(Token{kind: TokenType::Punctuation(Punctuations::Semicolon), ..token_default});
             },
@@ -258,9 +266,13 @@ impl<'a> Tokenizer<'a> {
         self.line = new_line;
     }
 
+    pub fn source_code_len(&self) -> usize {
+        return self.program_data.source_codes.get(&self.source_code).unwrap().chars().count();
+    }
+
     // Skips whitespace.
     pub fn skip_whitespace(&mut self) {
-        while self.position < self.program_data.source_code.len() && self.current_char().is_whitespace() && self.current_char() != '\n' {
+        while self.position < self.source_code_len() && self.current_char().is_whitespace() && self.current_char() != '\n' {
             self.col += 1;
             self.position += 1;
         }
@@ -268,10 +280,10 @@ impl<'a> Tokenizer<'a> {
 
     // Get current char of input.
     pub fn current_char(&self) -> char {
-        self.program_data.source_code[self.position..].chars().next().unwrap()
+        self.program_data.source_codes.get(&self.source_code).unwrap()[self.position..].chars().next().unwrap()
     }
 
     pub fn char_at_offset(&self, offset : i32) -> char {
-        self.program_data.source_code[((self.position as i32) + offset) as usize..].chars().next().unwrap()
+        self.program_data.source_codes.get(&self.source_code).unwrap()[((self.position as i32) + offset) as usize..].chars().next().unwrap()
     }
  }

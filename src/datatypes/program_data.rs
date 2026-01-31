@@ -19,14 +19,14 @@ pub struct ProgramData {
     pub scopes : Vec<Scope>,
     pub functions : HashMap<String, Function>,
     pub statements : Vec<Statement>,
-    pub source_code : String,
+    pub source_codes : HashMap<String, String>,
     pub tokens : Vec<Token>,
     pub errors : Vec<String>
 }
 
 impl ProgramData {
     pub fn new() -> Self {
-        Self { scopes: Vec::new(), functions: HashMap::new(), source_code: String::new(), tokens: Vec::new(), statements: Vec::new(), errors: Vec::new() }
+        Self { scopes: Vec::new(), functions: HashMap::new(), source_codes: HashMap::new(), tokens: Vec::new(), statements: Vec::new(), errors: Vec::new() }
     }
 
     pub fn get_scope_by_index(&self, index : usize) -> &'_ Scope {
