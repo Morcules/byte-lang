@@ -1,4 +1,6 @@
 use std::collections::HashMap;
+use std::fs;
+use std::hash::Hash;
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
 use std::process::Command;
@@ -177,12 +179,21 @@ fn compile_file() {
         .nth(2)
         .expect("Please Provide File Location");
 
+
+    let absolute_path = fs::canonicalize(file_location).expect("Invalid file location given");
+
+    let absolute_file_loc = absolute_path.to_str().unwrap();
+
+    println!("Reading: {:?}", absolute_file_loc);
+
     // Open the file.
-    let mut file = File::open(file_location).expect("Error Oppening File");
+    let mut file = File::open(absolute_file_loc).expect("Error Oppening File");
 
     let mut program_data = ProgramData::new();
 
-    file.read_to_string(&mut program_data.source_code).expect("Error Reading As String");
+    program_data.source_codes.insert(String::from(absolute_file_loc), String::new());
+    
+    file.read_to_string(program_data.source_codes.get_mut(absolute_file_loc).unwrap()).expect("Error Reading As String");
 
     // Get the path that user is in when running the run command!
     let current_dir = std::env::current_dir().expect("Error getting current Path");
@@ -202,11 +213,32 @@ fn compile_file() {
     // Create _main function.
     write!(writer, ".global _main\n.align 16\n.text\n").expect("Error Writing File");
 
-    let mut tokenizer = Tokenizer::new(&mut program_data);
-    tokenizer.tokenize_all();
+    let mut files_parsed : HashMap<String, bool> = HashMap::new();
 
-    let mut parser = Parser::new(&mut program_data);
-    parser.parse_all();
+    loop {
+        let mut exit = true;
+
+        for file_name in program_data.source_codes.clone().keys() {
+            if files_parsed.get(file_name).is_none() {
+                let mut tokenizer = Tokenizer::new(&mut program_data);
+                tokenizer.set_new_target(file_name);
+                tokenizer.tokenize_all();
+
+                let mut parser = Parser::new(&mut program_data, file_name);
+                parser.parse_all();
+
+                files_parsed.insert(file_name.clone(), true);
+
+                program_data.tokens.clear();
+
+                exit = false;
+            }
+        }
+
+        if exit {
+            break;
+        }
+    }
 
     if program_data.errors.len() > 0 {
         panic!("Errors: {:?}\n", program_data.errors);

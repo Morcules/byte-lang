@@ -35,7 +35,6 @@ pub enum MemoryLocations {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum TokenType {
-    EOF,
     Operator(Operators),
     Keyword(Keywords),
     Literal(Literal),
@@ -72,6 +71,7 @@ pub enum Punctuations {
     ClosedBraces,
     OpenSquareBracket,
     ClosedSquareBracket,
+    Hashtag,
     Dot,
     Comma,
     Semicolon
@@ -114,7 +114,8 @@ impl Punctuations {
             Punctuations::ClosedSquareBracket => "ClosedSquareBracket punctuation",
             Punctuations::Dot => "Dot punctuation",
             Punctuations::Comma => "Comma punctuation",
-            Punctuations::Semicolon => "Semicolon punctuation"
+            Punctuations::Semicolon => "Semicolon punctuation",
+            Punctuations::Hashtag => "Hashtag punctuation"
         };
 
         return String::from(str);
@@ -124,7 +125,6 @@ impl Punctuations {
 impl TokenType {
     pub fn type_string(&self) -> String {
         let str : &str = match self {
-            TokenType::EOF => "EOF",
             TokenType::Literal(literal) => &literal.type_string(),
             TokenType::Keyword(keyword) => &keyword.type_string(),
             TokenType::Operator(operator) => &operator.type_string(),
