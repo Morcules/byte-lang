@@ -184,6 +184,10 @@ impl<'a> CodeGenerator<'a> {
                     _ => todo!()
                 }
             },
+            CgVariableAssignmentType::Register(register) => {
+                // TODO
+                panic!()
+            },
             CgVariableAssignmentType::CompileTimeStackOffset(target_offset) => {
                 match (variable_type.clone(), expression.clone()) {
                     (

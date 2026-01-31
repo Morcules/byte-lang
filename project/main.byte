@@ -25,6 +25,8 @@ void : main() {
 
     something = string[2];
 
+    reg[x1] = 10;
+
     cmp(test2, test) {
         .ne {
             i64 test_integer = var;
